@@ -3,9 +3,18 @@
 import { useState, useEffect } from "react";
 import type { DevinSession } from "@/types";
 
+type SessionMessage = {
+  type: string;
+  message: string;
+  timestamp: string;
+  origin?: string | null;
+  username?: string | null;
+};
+
 type SessionDetailPanelProps = {
   session: DevinSession | null;
   onClose: () => void;
+  onTerminate?: (sessionId: string) => void;
 };
 
 const statusColors: Record<string, string> = {
@@ -20,10 +29,13 @@ const statusColors: Record<string, string> = {
 export default function SessionDetailPanel({
   session,
   onClose,
+  onTerminate,
 }: SessionDetailPanelProps) {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [terminating, setTerminating] = useState(false);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
+  const [messages, setMessages] = useState<SessionMessage[]>([]);
 
   useEffect(() => {
     if (!session) {
@@ -32,7 +44,12 @@ export default function SessionDetailPanel({
     }
     fetch(`/api/devin/sessions/${session.session_id}`)
       .then((r) => r.json())
-      .then(setDetail)
+      .then((data) => {
+        setDetail(data);
+        if (Array.isArray(data.messages)) {
+          setMessages(data.messages);
+        }
+      })
       .catch(() => setDetail(null));
   }, [session]);
 
@@ -125,17 +142,63 @@ export default function SessionDetailPanel({
         )}
       </div>
 
-      {/* Raw detail */}
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-5 py-3">
-        <p className="mb-2 text-xs font-medium text-zinc-500">Session Data</p>
-        {detail ? (
-          <pre className="whitespace-pre-wrap break-words text-xs text-zinc-400">
-            {JSON.stringify(detail, null, 2)}
-          </pre>
+        <p className="mb-2 text-xs font-medium text-zinc-500">
+          Messages ({messages.length})
+        </p>
+        {messages.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            {messages.map((msg, i) => (
+              <div
+                key={i}
+                className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2"
+              >
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="text-[10px] font-medium text-zinc-500">
+                    {msg.username || msg.origin || msg.type}
+                  </span>
+                  {msg.timestamp && (
+                    <span className="text-[10px] text-zinc-700">
+                      {new Date(msg.timestamp).toLocaleTimeString()}
+                    </span>
+                  )}
+                </div>
+                <p className="whitespace-pre-wrap text-xs text-zinc-300 line-clamp-6">
+                  {msg.message}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : detail ? (
+          <p className="text-xs text-zinc-600">No messages yet</p>
         ) : (
           <p className="text-xs text-zinc-600">Loading...</p>
         )}
       </div>
+
+      {/* Terminate */}
+      {session.status_enum !== "finished" &&
+        session.status_enum !== "stopped" && (
+          <div className="border-t border-zinc-800 px-5 py-2">
+            <button
+              onClick={async () => {
+                if (!confirm("Terminate this session?")) return;
+                setTerminating(true);
+                await fetch(`/api/devin/sessions/${session.session_id}`, {
+                  method: "DELETE",
+                });
+                setTerminating(false);
+                onTerminate?.(session.session_id);
+                onClose();
+              }}
+              disabled={terminating}
+              className="w-full rounded-lg border border-red-800/50 bg-red-950/30 py-1.5 text-xs text-red-400 transition-colors hover:bg-red-900/40 disabled:opacity-50"
+            >
+              {terminating ? "Terminating..." : "Terminate Session"}
+            </button>
+          </div>
+        )}
 
       {/* Send message */}
       {(session.status_enum === "working" ||

@@ -5,6 +5,8 @@ export type SessionStatus =
   | "finished"
   | "stopped"
   | "blocked"
+  | "expired"
+  | "suspended"
   | "unknown";
 
 export type KanbanColumnId = "queued" | "running" | "blocked" | "finished";

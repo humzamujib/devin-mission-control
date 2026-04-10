@@ -1,4 +1,4 @@
-const DEVIN_API_BASE = "https://api.devin.ai/v1";
+export const DEVIN_API_BASE = "https://api.devin.ai/v1";
 
 function getHeaders(): HeadersInit {
   const token = process.env.DEVIN_API_TOKEN;
@@ -17,7 +17,7 @@ export async function listSessions(): Promise<Response> {
 }
 
 export async function getSession(sessionId: string): Promise<Response> {
-  return fetch(`${DEVIN_API_BASE}/session/${sessionId}`, {
+  return fetch(`${DEVIN_API_BASE}/sessions/${sessionId}`, {
     headers: getHeaders(),
     cache: "no-store",
   });
@@ -35,9 +35,16 @@ export async function sendMessage(
   sessionId: string,
   message: string
 ): Promise<Response> {
-  return fetch(`${DEVIN_API_BASE}/session/${sessionId}/message`, {
+  return fetch(`${DEVIN_API_BASE}/sessions/${sessionId}/message`, {
     method: "POST",
     headers: getHeaders(),
     body: JSON.stringify({ message }),
+  });
+}
+
+export async function terminateSession(sessionId: string): Promise<Response> {
+  return fetch(`${DEVIN_API_BASE}/sessions/${sessionId}`, {
+    method: "DELETE",
+    headers: getHeaders(),
   });
 }

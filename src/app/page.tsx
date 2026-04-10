@@ -101,6 +101,10 @@ export default function Home() {
       <SessionDetailPanel
         session={selectedSession}
         onClose={() => setSelectedSession(null)}
+        onTerminate={() => {
+          setSelectedSession(null);
+          fetchSessions();
+        }}
       />
       <LinearPanel
         open={showLinear}
