@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import type { DevinSession, KanbanColumn, KanbanColumnId } from "@/types";
 import SessionCard from "./SessionCard";
 
@@ -10,6 +11,8 @@ type KanbanBoardProps = {
   colorMap: Record<string, string>;
   onSelectSession: (session: DevinSession) => void;
 };
+
+const STORAGE_KEY = "mc_collapsed_columns";
 
 const columns: { id: KanbanColumnId; title: string; dotColor: string }[] = [
   { id: "queued", title: "Queued", dotColor: "bg-t-text-muted" },
@@ -70,47 +73,97 @@ export default function KanbanBoard({
   onSelectSession,
 }: KanbanBoardProps) {
   const kanbanColumns = groupSessions(sessions, dismissedIds);
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([...collapsed]));
+  }, [collapsed]);
+
+  function toggleCollapse(id: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   return (
-    <div className="flex h-full gap-5 overflow-x-auto overflow-y-hidden p-6">
-      {kanbanColumns.map((column) => (
-        <div
-          key={column.id}
-          className="flex w-72 shrink-0 flex-col rounded-xl bg-t-surface/60"
-        >
-          <div className="flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-2">
-              <span className={`h-2 w-2 rounded-full ${column.color}`} />
-              <h2 className="text-sm font-semibold text-t-text-secondary">
+    <div className="flex h-full gap-3 overflow-x-auto overflow-y-hidden p-6">
+      {kanbanColumns.map((column) => {
+        const isCollapsed = collapsed.has(column.id);
+        const count = column.sessions.length;
+
+        if (isCollapsed) {
+          return (
+            <button
+              key={column.id}
+              onClick={() => toggleCollapse(column.id)}
+              className="flex w-10 shrink-0 flex-col items-center rounded-xl bg-t-surface/60 py-3 transition-colors hover:bg-t-surface"
+            >
+              <span className={`h-2 w-2 rounded-full ${column.color} mb-2`} />
+              <span className="[writing-mode:vertical-lr] text-xs font-semibold text-t-text-muted">
                 {column.title}
-              </h2>
-            </div>
-            {column.id !== "finished" && column.id !== "idle" && (
-              <span className="rounded-full bg-t-surface-hover px-2 py-0.5 text-xs text-t-text-muted">
-                {column.sessions.length}
               </span>
-            )}
+              {count > 0 && (
+                <span className="mt-2 rounded-full bg-t-surface-hover px-1.5 py-0.5 text-[10px] text-t-text-muted">
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        }
+
+        return (
+          <div
+            key={column.id}
+            className="flex w-72 shrink-0 flex-col rounded-xl bg-t-surface/60"
+          >
+            <button
+              onClick={() => toggleCollapse(column.id)}
+              className="flex items-center justify-between px-4 py-3 transition-colors hover:bg-t-surface-hover rounded-t-xl"
+            >
+              <div className="flex items-center gap-2">
+                <span className={`h-2 w-2 rounded-full ${column.color}`} />
+                <h2 className="text-sm font-semibold text-t-text-secondary">
+                  {column.title}
+                </h2>
+              </div>
+              {column.id !== "finished" && column.id !== "idle" && (
+                <span className="rounded-full bg-t-surface-hover px-2 py-0.5 text-xs text-t-text-muted">
+                  {count}
+                </span>
+              )}
+            </button>
+            <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 py-3">
+              {count === 0 ? (
+                <p className="py-8 text-center text-xs text-t-text-muted">
+                  No sessions
+                </p>
+              ) : (
+                column.sessions.map((session) => (
+                  <SessionCard
+                    key={session.session_id}
+                    session={session}
+                    isOpen={openSessionIds.includes(session.session_id)}
+                    accentColor={colorMap[session.session_id]}
+                    displayStatus={column.id === "idle" ? "idle" : undefined}
+                    onClick={onSelectSession}
+                  />
+                ))
+              )}
+            </div>
           </div>
-          <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 py-3">
-            {column.sessions.length === 0 ? (
-              <p className="py-8 text-center text-xs text-t-text-muted">
-                No sessions
-              </p>
-            ) : (
-              column.sessions.map((session) => (
-                <SessionCard
-                  key={session.session_id}
-                  session={session}
-                  isOpen={openSessionIds.includes(session.session_id)}
-                  accentColor={colorMap[session.session_id]}
-                  displayStatus={column.id === "idle" ? "idle" : undefined}
-                  onClick={onSelectSession}
-                />
-              ))
-            )}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
