@@ -1,91 +1,98 @@
-const LINEAR_API_URL = "https://api.linear.app/graphql";
+export type LinearTicket = {
+  id: string;
+  title: string;
+  status: string;
+  priority: { value: number; name: string };
+  labels: string[];
+  team: string;
+  project: string;
+  url: string;
+  dueDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  description: string;
+};
 
-function getHeaders(): HeadersInit {
-  const token = process.env.LINEAR_API_KEY;
-  if (!token) throw new Error("LINEAR_API_KEY is not set");
+export type VaultExport = {
+  exportedAt: string;
+  assignee: string;
+  totalCount: number;
+  tickets: LinearTicket[];
+};
+
+const VAULT_API_URL =
+  "https://api.github.com/repos/humzamujib/ai-vault/contents/linear/tickets.json";
+const LINEAR_SYNC_PLAYBOOK = "playbook-d18aaca0c237457daaa651eb40677a8d";
+const ACTIONABLE_STATUSES = ["Backlog"];
+
+function getGitHubHeaders(): HeadersInit {
+  const token = process.env.GITHUB_TOKEN;
+  const headers: HeadersInit = { Accept: "application/vnd.github.v3+json" };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+function getDevinHeaders(): HeadersInit {
+  const token = process.env.DEVIN_API_TOKEN;
+  if (!token) throw new Error("DEVIN_API_TOKEN is not set");
   return {
-    Authorization: token,
+    Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
   };
 }
 
-export type LinearIssue = {
-  id: string;
-  identifier: string;
-  title: string;
-  state: { name: string; color: string };
-  assignee?: { name: string; email: string } | null;
-  url: string;
-  priority: number;
-  labels: { nodes: { name: string; color: string }[] };
-};
-
-const ISSUES_QUERY = `
-  query GetIssues($teamId: String, $first: Int) {
-    issues(
-      filter: {
-        team: { key: { eq: $teamId } }
-        state: { type: { nin: ["canceled", "completed"] } }
-      }
-      first: $first
-      orderBy: updatedAt
-    ) {
-      nodes {
-        id
-        identifier
-        title
-        state { name color }
-        assignee { name email }
-        url
-        priority
-        labels { nodes { name color } }
-      }
-    }
-  }
-`;
-
-export async function getIssues(
-  teamKey?: string,
-  first = 50
-): Promise<{ issues: LinearIssue[]; error?: string }> {
+export async function fetchTicketsFromVault(): Promise<{
+  data: VaultExport | null;
+  error?: string;
+}> {
   try {
-    const res = await fetch(LINEAR_API_URL, {
-      method: "POST",
-      headers: getHeaders(),
-      body: JSON.stringify({
-        query: ISSUES_QUERY,
-        variables: { teamId: teamKey || null, first },
-      }),
+    const res = await fetch(VAULT_API_URL, {
+      headers: getGitHubHeaders(),
+      cache: "no-store",
     });
-    const data = await res.json();
-    if (data.errors) {
-      return { issues: [], error: data.errors[0]?.message };
+    if (!res.ok) {
+      return { data: null, error: `GitHub API error: ${res.status}` };
     }
-    return { issues: data.data?.issues?.nodes ?? [] };
+    const json = await res.json();
+    const content = Buffer.from(json.content, "base64").toString("utf-8");
+    const parsed: VaultExport = JSON.parse(content);
+    return { data: parsed };
   } catch (err) {
     return {
-      issues: [],
-      error: err instanceof Error ? err.message : "Linear API error",
+      data: null,
+      error: err instanceof Error ? err.message : "Failed to fetch vault",
     };
   }
 }
 
-const TEAMS_QUERY = `
-  query { teams { nodes { id key name } } }
-`;
+export function filterActionableTickets(tickets: LinearTicket[]): LinearTicket[] {
+  return tickets.filter((t) => ACTIONABLE_STATUSES.includes(t.status));
+}
 
-export async function getTeams(): Promise<
-  { id: string; key: string; name: string }[]
-> {
+export async function triggerLinearSync(): Promise<{
+  session_id?: string;
+  error?: string;
+}> {
   try {
-    const res = await fetch(LINEAR_API_URL, {
+    const res = await fetch("https://api.devin.ai/v1/sessions", {
       method: "POST",
-      headers: getHeaders(),
-      body: JSON.stringify({ query: TEAMS_QUERY }),
+      headers: getDevinHeaders(),
+      body: JSON.stringify({
+        prompt: "Run the playbook",
+        playbook_id: LINEAR_SYNC_PLAYBOOK,
+      }),
     });
     const data = await res.json();
-    return data.data?.teams?.nodes ?? [];
-  } catch {
-    return [];
+    if (!res.ok) {
+      return { error: data.detail || `Devin API error: ${res.status}` };
+    }
+    return { session_id: data.session_id };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Failed to trigger sync",
+    };
   }
 }

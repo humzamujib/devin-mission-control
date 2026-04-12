@@ -60,7 +60,7 @@ export default function CreateSessionModal({
             <button
               type="submit"
               disabled={loading || !prompt.trim()}
-              className="rounded-lg bg-t-primary px-4 py-2 text-sm font-medium text-t-text-bright transition-colors hover:bg-t-primary-hover disabled:opacity-50"
+              className="rounded-lg bg-t-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-t-primary-hover disabled:opacity-50"
             >
               {loading ? "Creating..." : "Launch Session"}
             </button>

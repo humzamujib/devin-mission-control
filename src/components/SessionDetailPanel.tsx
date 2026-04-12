@@ -276,7 +276,7 @@ export default function SessionDetailPanel({
             <button
               type="submit"
               disabled={sending || !message.trim()}
-              className="rounded-lg bg-t-primary px-3 py-2 text-sm font-medium text-t-text-bright transition-colors hover:bg-t-primary-hover disabled:opacity-50"
+              className="rounded-lg bg-t-primary px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-t-primary-hover disabled:opacity-50"
             >
               {sending ? "..." : "Send"}
             </button>

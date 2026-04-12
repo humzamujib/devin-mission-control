@@ -4,6 +4,7 @@ import type { DevinSession } from "@/types";
 
 type SessionCardProps = {
   session: DevinSession;
+  isOpen?: boolean;
   onClick: (session: DevinSession) => void;
 };
 
@@ -27,7 +28,7 @@ const statusColors: Record<string, string> = {
   blocked: "bg-t-warning",
 };
 
-export default function SessionCard({ session, onClick }: SessionCardProps) {
+export default function SessionCard({ session, isOpen, onClick }: SessionCardProps) {
   const title =
     session.structured_output?.title ||
     session.title ||
@@ -37,7 +38,11 @@ export default function SessionCard({ session, onClick }: SessionCardProps) {
   return (
     <button
       onClick={() => onClick(session)}
-      className="w-full rounded-lg border border-t-border bg-t-surface p-3 text-left transition-colors hover:border-t-border-hover hover:bg-t-surface-hover"
+      className={`w-full rounded-lg p-3 text-left transition-all ${
+        isOpen
+          ? "bg-t-primary/5 ring-1 ring-t-primary/40 shadow-sm"
+          : "bg-t-surface shadow-sm hover:shadow-md hover:bg-t-surface-hover"
+      }`}
     >
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">

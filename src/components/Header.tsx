@@ -86,7 +86,7 @@ export default function Header({
               </button>
               <button
                 onClick={onCreateSession}
-                className="rounded-lg bg-t-primary px-4 py-1.5 text-sm font-medium text-t-text-bright transition-colors hover:bg-t-primary-hover"
+                className="rounded-lg bg-t-primary px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-t-primary-hover"
               >
                 + New Session
               </button>

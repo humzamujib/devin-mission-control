@@ -50,7 +50,7 @@ export default function SettingsPanel({
                   <p className="text-xs text-t-text-muted">{t.source}</p>
                 </div>
                 {currentTheme === t.id && (
-                  <span className="ml-auto rounded-full bg-t-primary px-2 py-0.5 text-[10px] font-medium text-t-text-bright">
+                  <span className="ml-auto rounded-full bg-t-primary px-2 py-0.5 text-[10px] font-medium text-white">
                     Active
                   </span>
                 )}

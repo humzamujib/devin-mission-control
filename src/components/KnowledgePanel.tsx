@@ -208,7 +208,7 @@ export default function KnowledgePanel() {
           />
           <button
             onClick={() => openEditor(null)}
-            className="shrink-0 rounded bg-t-primary px-2 py-1 text-xs font-medium text-t-text-bright hover:bg-t-primary-hover"
+            className="shrink-0 rounded bg-t-primary px-2 py-1 text-xs font-medium text-white hover:bg-t-primary-hover"
           >
             +
           </button>
@@ -351,7 +351,7 @@ export default function KnowledgePanel() {
                     !editBody.trim() ||
                     !editTrigger.trim()
                   }
-                  className="rounded-lg bg-t-primary px-4 py-2 text-xs font-medium text-t-text-bright hover:bg-t-primary-hover disabled:opacity-50"
+                  className="rounded-lg bg-t-primary px-4 py-2 text-xs font-medium text-white hover:bg-t-primary-hover disabled:opacity-50"
                 >
                   {saving ? "Saving..." : creating ? "Create" : "Save"}
                 </button>

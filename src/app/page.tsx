@@ -6,13 +6,12 @@ import { getStoredTheme, applyTheme, type ThemeId } from "@/lib/themes";
 import Header from "@/components/Header";
 import KanbanBoard from "@/components/KanbanBoard";
 import CreateSessionModal from "@/components/CreateSessionModal";
-import SessionDetailPanel from "@/components/SessionDetailPanel";
+import SessionSplitView from "@/components/SessionSplitView";
 import LinearPanel from "@/components/LinearPanel";
 import KnowledgePanel from "@/components/KnowledgePanel";
 import SettingsPanel from "@/components/SettingsPanel";
 
 const POLL_INTERVAL = 15_000;
-
 const USER_EMAIL = "humza.mujib@bilt.com";
 
 type Tab = "sessions" | "knowledge" | "settings";
@@ -27,11 +26,9 @@ export default function Home() {
   const [showCreate, setShowCreate] = useState(false);
   const [showLinear, setShowLinear] = useState(false);
   const [createPrompt, setCreatePrompt] = useState("");
-  const [selectedSession, setSelectedSession] = useState<DevinSession | null>(
-    null
-  );
+  const [openSessionIds, setOpenSessionIds] = useState<string[]>([]);
+  const [boardExpanded, setBoardExpanded] = useState(true);
 
-  // Apply theme on mount
   useEffect(() => {
     const stored = getStoredTheme();
     setTheme(stored);
@@ -74,6 +71,23 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [fetchSessions]);
 
+  function handleOpenSession(session: DevinSession) {
+    setOpenSessionIds((ids) =>
+      ids.includes(session.session_id)
+        ? ids
+        : [...ids, session.session_id]
+    );
+  }
+
+  function handleCloseSession(id: string) {
+    setOpenSessionIds((ids) => ids.filter((i) => i !== id));
+  }
+
+  function handleTerminateSession(id: string) {
+    handleCloseSession(id);
+    fetchSessions();
+  }
+
   async function handleCreateSession(prompt: string) {
     await fetch("/api/devin/sessions", {
       method: "POST",
@@ -83,11 +97,12 @@ export default function Home() {
     fetchSessions();
   }
 
-  function handleLinearToDevin(prompt: string) {
-    setCreatePrompt(prompt);
+  async function handleLinearToDevin(prompt: string) {
     setShowLinear(false);
-    setShowCreate(true);
+    await handleCreateSession(prompt);
   }
+
+  const hasOpenSessions = openSessionIds.length > 0;
 
   return (
     <div className="flex h-screen flex-col bg-t-bg text-t-text">
@@ -96,7 +111,11 @@ export default function Home() {
         onTabChange={setTab}
         onCreateSession={() => setShowCreate(true)}
         onToggleLinear={() => setShowLinear((v) => !v)}
-        sessionCount={sessions.filter((s) => s.status_enum !== "finished" && s.status_enum !== "stopped").length}
+        sessionCount={
+          sessions.filter(
+            (s) => s.status_enum !== "finished" && s.status_enum !== "stopped"
+          ).length
+        }
         lastRefresh={lastRefresh}
         onRefresh={fetchSessions}
       />
@@ -108,16 +127,29 @@ export default function Home() {
               {error}
             </div>
           )}
-          {loading ? (
-            <div className="flex flex-1 items-center justify-center">
-              <p className="text-t-text-muted">Loading sessions...</p>
+          {(!hasOpenSessions || boardExpanded) && (
+            <div className={`overflow-hidden ${hasOpenSessions ? "h-1/2 shrink-0" : "flex-1"}`}>
+              {loading ? (
+                <div className="flex h-full items-center justify-center">
+                  <p className="text-t-text-muted">Loading sessions...</p>
+                </div>
+              ) : (
+                <KanbanBoard
+                  sessions={sessions}
+                  openSessionIds={openSessionIds}
+                  onSelectSession={handleOpenSession}
+                />
+              )}
             </div>
-          ) : (
-            <KanbanBoard
-              sessions={sessions}
-              onSelectSession={setSelectedSession}
-            />
           )}
+          <SessionSplitView
+            openSessionIds={openSessionIds}
+            sessions={sessions}
+            boardExpanded={boardExpanded}
+            onToggleBoard={() => setBoardExpanded((v) => !v)}
+            onClose={handleCloseSession}
+            onTerminate={handleTerminateSession}
+          />
           <CreateSessionModal
             open={showCreate}
             onClose={() => {
@@ -127,18 +159,13 @@ export default function Home() {
             onSubmit={handleCreateSession}
             initialPrompt={createPrompt}
           />
-          <SessionDetailPanel
-            session={selectedSession}
-            onClose={() => setSelectedSession(null)}
-            onTerminate={() => {
-              setSelectedSession(null);
-              fetchSessions();
-            }}
-          />
           <LinearPanel
             open={showLinear}
             onClose={() => setShowLinear(false)}
-            onSendToDevin={handleLinearToDevin}
+            onCreateSession={handleLinearToDevin}
+            activeSessionTitles={sessions
+              .filter((s) => s.status_enum !== "finished" && s.status_enum !== "stopped")
+              .map((s) => s.title || "")}
           />
         </>
       )}

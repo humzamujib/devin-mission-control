@@ -1,8 +1,39 @@
 @import "tailwindcss";
 
 /* === Theme System === */
-/* Default: Navy — https://colorhunt.co/palette/f9f7f7dbe2ef3f72af112d4e */
+/* Default: Alabaster — warm neutral light theme, WCAG AA+ */
 :root,
+[data-theme="alabaster"] {
+  --theme-bg: #f5f3ee;
+  --theme-surface: #ffffff;
+  --theme-surface-hover: #edeae4;
+  --theme-border: #d8d4cc;
+  --theme-border-hover: #b8b4ac;
+  --theme-primary: #2b6cb0;
+  --theme-primary-hover: #245a94;
+  --theme-accent: #133250;
+  --theme-accent-dim: #4b7aa8;
+
+  --theme-text: #1f2937;
+  --theme-text-secondary: #4b5563;
+  --theme-text-muted: #78756d;
+  --theme-text-bright: #0f172a;
+
+  --theme-success: #16794a;
+  --theme-warning: #a16207;
+  --theme-error: #b91c1c;
+  --theme-info: #2b6cb0;
+
+  --theme-msg-user-bg: #ede8dc;
+  --theme-msg-user-border: #d4ccba;
+  --theme-msg-devin-bg: #f8f7f5;
+  --theme-msg-devin-border: #e5e2dc;
+
+  --background: var(--theme-bg);
+  --foreground: var(--theme-text);
+}
+
+/* Navy — https://colorhunt.co/palette/f9f7f7dbe2ef3f72af112d4e */
 [data-theme="navy"] {
   --theme-bg: #112d4e;
   --theme-surface: #1a3a5c;

@@ -1,4 +1,4 @@
-export type ThemeId = "navy" | "forest";
+export type ThemeId = "alabaster" | "navy" | "forest";
 
 export type ThemeDef = {
   id: ThemeId;
@@ -8,6 +8,12 @@ export type ThemeDef = {
 };
 
 export const themes: ThemeDef[] = [
+  {
+    id: "alabaster",
+    name: "Alabaster",
+    colors: ["#F5F3EE", "#D8D4CC", "#2B6CB0", "#133250"],
+    source: "Warm neutral light — WCAG AA+",
+  },
   {
     id: "navy",
     name: "Navy",
@@ -25,8 +31,8 @@ export const themes: ThemeDef[] = [
 const STORAGE_KEY = "mc_theme";
 
 export function getStoredTheme(): ThemeId {
-  if (typeof window === "undefined") return "navy";
-  return (localStorage.getItem(STORAGE_KEY) as ThemeId) || "navy";
+  if (typeof window === "undefined") return "alabaster";
+  return (localStorage.getItem(STORAGE_KEY) as ThemeId) || "alabaster";
 }
 
 export function applyTheme(id: ThemeId) {

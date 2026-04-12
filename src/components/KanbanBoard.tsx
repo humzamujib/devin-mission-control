@@ -5,14 +5,15 @@ import SessionCard from "./SessionCard";
 
 type KanbanBoardProps = {
   sessions: DevinSession[];
+  openSessionIds: string[];
   onSelectSession: (session: DevinSession) => void;
 };
 
-const columns: { id: KanbanColumnId; title: string; accent: string }[] = [
-  { id: "queued", title: "Queued", accent: "border-t-text-muted" },
-  { id: "running", title: "Running", accent: "border-t-success" },
-  { id: "blocked", title: "Needs Input", accent: "border-t-warning" },
-  { id: "finished", title: "Finished", accent: "border-t-info" },
+const columns: { id: KanbanColumnId; title: string; dotColor: string }[] = [
+  { id: "queued", title: "Queued", dotColor: "bg-t-text-muted" },
+  { id: "running", title: "Running", dotColor: "bg-t-success" },
+  { id: "blocked", title: "Needs Input", dotColor: "bg-t-warning" },
+  { id: "finished", title: "Finished", dotColor: "bg-t-info" },
 ];
 
 function classifySession(session: DevinSession): KanbanColumnId {
@@ -46,7 +47,7 @@ function groupSessions(sessions: DevinSession[]): KanbanColumn[] {
 
   return columns.map((col) => ({
     ...col,
-    color: col.accent,
+    color: col.dotColor,
     sessions: groups[col.id].sort(
       (a, b) =>
         new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
@@ -56,30 +57,32 @@ function groupSessions(sessions: DevinSession[]): KanbanColumn[] {
 
 export default function KanbanBoard({
   sessions,
+  openSessionIds,
   onSelectSession,
 }: KanbanBoardProps) {
   const kanbanColumns = groupSessions(sessions);
 
   return (
-    <div className="flex flex-1 gap-4 overflow-x-auto p-6">
+    <div className="flex h-full gap-5 overflow-x-auto overflow-y-hidden p-6">
       {kanbanColumns.map((column) => (
         <div
           key={column.id}
-          className="flex w-72 shrink-0 flex-col rounded-xl border border-t-border bg-t-bg/50"
+          className="flex w-72 shrink-0 flex-col rounded-xl bg-t-surface/60"
         >
-          <div
-            className={`flex items-center justify-between border-b border-t-border px-4 py-3 border-t-2 ${column.color} rounded-t-xl`}
-          >
-            <h2 className="text-sm font-semibold text-t-text-secondary">
-              {column.title}
-            </h2>
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className={`h-2 w-2 rounded-full ${column.color}`} />
+              <h2 className="text-sm font-semibold text-t-text-secondary">
+                {column.title}
+              </h2>
+            </div>
             {column.id !== "finished" && (
-              <span className="rounded-full bg-t-border px-2 py-0.5 text-xs text-t-text-muted">
+              <span className="rounded-full bg-t-surface-hover px-2 py-0.5 text-xs text-t-text-muted">
                 {column.sessions.length}
               </span>
             )}
           </div>
-          <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-3">
+          <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 pb-3">
             {column.sessions.length === 0 ? (
               <p className="py-8 text-center text-xs text-t-text-muted">
                 No sessions
@@ -89,6 +92,7 @@ export default function KanbanBoard({
                 <SessionCard
                   key={session.session_id}
                   session={session}
+                  isOpen={openSessionIds.includes(session.session_id)}
                   onClick={onSelectSession}
                 />
               ))
