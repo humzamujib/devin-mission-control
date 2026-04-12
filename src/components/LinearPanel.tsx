@@ -52,15 +52,17 @@ export default function LinearPanel({
   }
 
   return (
-    <div className="fixed inset-y-0 left-0 z-40 flex w-80 flex-col border-r border-zinc-800 bg-zinc-950 shadow-2xl">
-      <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
+    <div className="fixed inset-y-0 left-0 z-40 flex w-80 flex-col border-r border-t-border bg-t-bg shadow-2xl">
+      <div className="flex items-center justify-between border-b border-t-border px-5 py-4">
         <div className="flex items-center gap-2">
-          <div className="h-4 w-4 rounded bg-indigo-500" />
-          <h2 className="text-sm font-semibold text-white">Linear Issues</h2>
+          <div className="h-4 w-4 rounded bg-t-primary" />
+          <h2 className="text-sm font-semibold text-t-text-bright">
+            Linear Issues
+          </h2>
         </div>
         <button
           onClick={onClose}
-          className="text-zinc-500 transition-colors hover:text-zinc-300"
+          className="text-t-text-muted transition-colors hover:text-t-text-secondary"
         >
           &times;
         </button>
@@ -68,12 +70,12 @@ export default function LinearPanel({
 
       <div className="flex-1 overflow-y-auto">
         {loading && (
-          <p className="p-4 text-xs text-zinc-500">Loading issues...</p>
+          <p className="p-4 text-xs text-t-text-muted">Loading issues...</p>
         )}
         {error && (
-          <div className="m-3 rounded-lg border border-amber-800 bg-amber-950/50 px-3 py-2 text-xs text-amber-400">
+          <div className="m-3 rounded-lg border border-t-warning/30 bg-t-warning/10 px-3 py-2 text-xs text-t-warning">
             {error}
-            <p className="mt-1 text-zinc-500">
+            <p className="mt-1 text-t-text-muted">
               Set LINEAR_API_KEY in .env.local
             </p>
           </div>
@@ -83,23 +85,23 @@ export default function LinearPanel({
           issues.map((issue) => (
             <div
               key={issue.id}
-              className="border-b border-zinc-800/50 px-4 py-3 transition-colors hover:bg-zinc-900"
+              className="border-b border-t-border/50 px-4 py-3 transition-colors hover:bg-t-surface"
             >
               <div className="mb-1 flex items-center gap-2">
                 <span
                   className="h-2 w-2 rounded-full"
                   style={{ backgroundColor: issue.state.color }}
                 />
-                <span className="text-xs font-medium text-zinc-500">
+                <span className="text-xs font-medium text-t-text-muted">
                   {issue.identifier}
                 </span>
                 {issue.priority <= 2 && issue.priority > 0 && (
-                  <span className="rounded bg-red-900/50 px-1.5 py-0.5 text-[10px] text-red-400">
+                  <span className="rounded bg-t-error/20 px-1.5 py-0.5 text-[10px] text-t-error">
                     P{issue.priority}
                   </span>
                 )}
               </div>
-              <p className="mb-2 text-sm text-zinc-300 line-clamp-2">
+              <p className="mb-2 text-sm text-t-text line-clamp-2">
                 {issue.title}
               </p>
               <div className="flex items-center justify-between">
@@ -119,7 +121,7 @@ export default function LinearPanel({
                 </div>
                 <button
                   onClick={() => handleSendToDevin(issue)}
-                  className="rounded bg-indigo-600/20 px-2 py-1 text-[10px] font-medium text-indigo-400 transition-colors hover:bg-indigo-600/40"
+                  className="rounded bg-t-primary/20 px-2 py-1 text-[10px] font-medium text-t-accent transition-colors hover:bg-t-primary/40"
                 >
                   Send to Devin
                 </button>

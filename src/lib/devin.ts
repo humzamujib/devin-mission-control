@@ -9,8 +9,13 @@ function getHeaders(): HeadersInit {
   };
 }
 
-export async function listSessions(): Promise<Response> {
-  return fetch(`${DEVIN_API_BASE}/sessions`, {
+export async function listSessions(userEmail?: string): Promise<Response> {
+  const url = new URL(`${DEVIN_API_BASE}/sessions`);
+  url.searchParams.set("limit", "100");
+  if (userEmail) {
+    url.searchParams.set("user_email", userEmail);
+  }
+  return fetch(url.toString(), {
     headers: getHeaders(),
     cache: "no-store",
   });

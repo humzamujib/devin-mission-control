@@ -1,6 +1,10 @@
 "use client";
 
+type Tab = "sessions" | "knowledge" | "settings";
+
 type HeaderProps = {
+  tab: Tab;
+  onTabChange: (tab: Tab) => void;
   onCreateSession: () => void;
   onToggleLinear: () => void;
   sessionCount: number;
@@ -9,6 +13,8 @@ type HeaderProps = {
 };
 
 export default function Header({
+  tab,
+  onTabChange,
   onCreateSession,
   onToggleLinear,
   sessionCount,
@@ -16,39 +22,77 @@ export default function Header({
   onRefresh,
 }: HeaderProps) {
   return (
-    <header className="flex items-center justify-between border-b border-zinc-800 bg-zinc-950 px-6 py-4">
-      <div className="flex items-center gap-4">
-        <h1 className="text-xl font-semibold text-white tracking-tight">
-          Mission Control
-        </h1>
-        <span className="rounded-full bg-zinc-800 px-3 py-0.5 text-xs text-zinc-400">
-          {sessionCount} sessions
-        </span>
-      </div>
-      <div className="flex items-center gap-3">
-        {lastRefresh && (
-          <span className="text-xs text-zinc-500">
-            Updated {lastRefresh.toLocaleTimeString()}
-          </span>
-        )}
-        <button
-          onClick={onToggleLinear}
-          className="rounded-lg border border-indigo-700/50 bg-indigo-950/30 px-3 py-1.5 text-sm text-indigo-300 transition-colors hover:bg-indigo-900/30"
-        >
-          Linear
-        </button>
-        <button
-          onClick={onRefresh}
-          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition-colors hover:bg-zinc-800"
-        >
-          Refresh
-        </button>
-        <button
-          onClick={onCreateSession}
-          className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-indigo-500"
-        >
-          + New Session
-        </button>
+    <header className="border-b border-t-border bg-t-bg">
+      <div className="flex items-center justify-between px-6 py-3">
+        <div className="flex items-center gap-6">
+          <h1 className="text-lg font-semibold text-t-text-bright tracking-tight">
+            Mission Control
+          </h1>
+          <nav className="flex items-center gap-1">
+            <button
+              onClick={() => onTabChange("sessions")}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                tab === "sessions"
+                  ? "bg-t-surface text-t-text-bright"
+                  : "text-t-text-muted hover:text-t-text-secondary"
+              }`}
+            >
+              Sessions
+              <span className="ml-1.5 rounded-full bg-t-border px-1.5 py-0.5 text-[10px] text-t-text-secondary">
+                {sessionCount}
+              </span>
+            </button>
+            <button
+              onClick={() => onTabChange("knowledge")}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                tab === "knowledge"
+                  ? "bg-t-surface text-t-text-bright"
+                  : "text-t-text-muted hover:text-t-text-secondary"
+              }`}
+            >
+              Knowledge
+            </button>
+            <button
+              onClick={() => onTabChange("settings")}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                tab === "settings"
+                  ? "bg-t-surface text-t-text-bright"
+                  : "text-t-text-muted hover:text-t-text-secondary"
+              }`}
+            >
+              Settings
+            </button>
+          </nav>
+        </div>
+        <div className="flex items-center gap-3">
+          {tab === "sessions" && (
+            <>
+              {lastRefresh && (
+                <span className="text-xs text-t-text-muted">
+                  {lastRefresh.toLocaleTimeString()}
+                </span>
+              )}
+              <button
+                onClick={onToggleLinear}
+                className="rounded-lg border border-t-primary/40 bg-t-primary/10 px-3 py-1.5 text-sm text-t-accent-dim transition-colors hover:bg-t-primary/20"
+              >
+                Linear
+              </button>
+              <button
+                onClick={onRefresh}
+                className="rounded-lg border border-t-border px-3 py-1.5 text-sm text-t-text-secondary transition-colors hover:bg-t-surface"
+              >
+                Refresh
+              </button>
+              <button
+                onClick={onCreateSession}
+                className="rounded-lg bg-t-primary px-4 py-1.5 text-sm font-medium text-t-text-bright transition-colors hover:bg-t-primary-hover"
+              >
+                + New Session
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </header>
   );
