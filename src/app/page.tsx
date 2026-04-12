@@ -10,6 +10,7 @@ import SessionSplitView from "@/components/SessionSplitView";
 import LinearPanel from "@/components/LinearPanel";
 import KnowledgePanel from "@/components/KnowledgePanel";
 import SettingsPanel from "@/components/SettingsPanel";
+import VaultPanel from "@/components/VaultPanel";
 
 const POLL_INTERVAL = 15_000;
 const USER_EMAIL = process.env.NEXT_PUBLIC_DEVIN_USER_EMAIL || "";
@@ -18,7 +19,7 @@ const SESSION_COLORS = [
   "#2B6CB0", "#16794A", "#A16207", "#9333EA", "#DC2626", "#0891B2",
 ];
 
-type Tab = "sessions" | "knowledge" | "settings";
+type Tab = "sessions" | "knowledge" | "vault" | "settings";
 export type LayoutMode = "board" | "split" | "focus";
 
 export default function Home() {
@@ -248,6 +249,8 @@ export default function Home() {
       )}
 
       {tab === "knowledge" && <KnowledgePanel />}
+
+      {tab === "vault" && <VaultPanel />}
 
       {tab === "settings" && (
         <SettingsPanel

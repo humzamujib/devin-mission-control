@@ -1,6 +1,6 @@
 "use client";
 
-type Tab = "sessions" | "knowledge" | "settings";
+type Tab = "sessions" | "knowledge" | "vault" | "settings";
 
 type HeaderProps = {
   tab: Tab;
@@ -51,6 +51,16 @@ export default function Header({
               }`}
             >
               Knowledge
+            </button>
+            <button
+              onClick={() => onTabChange("vault")}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                tab === "vault"
+                  ? "bg-t-surface text-t-text-bright"
+                  : "text-t-text-muted hover:text-t-text-secondary"
+              }`}
+            >
+              Vault
             </button>
             <button
               onClick={() => onTabChange("settings")}
