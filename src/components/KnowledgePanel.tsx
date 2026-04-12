@@ -8,7 +8,7 @@ import type {
   KnowledgeFilter,
 } from "@/types/knowledge";
 
-const USER_NAME = "Humza Mujib";
+const USER_NAME = process.env.NEXT_PUBLIC_DEVIN_USER_NAME || "";
 
 export default function KnowledgePanel() {
   const [notes, setNotes] = useState<KnowledgeNote[]>([]);
@@ -47,10 +47,10 @@ export default function KnowledgePanel() {
   const filteredNotes = notes.filter((n) => {
     if (filter === "mine") {
       const creatorName = n.created_by?.full_name || "";
-      if (!creatorName.toLowerCase().includes("humza")) return false;
+      if (!creatorName.toLowerCase().includes(USER_NAME.split(" ")[0].toLowerCase())) return false;
     } else if (filter === "org") {
       const creatorName = n.created_by?.full_name || "";
-      if (creatorName.toLowerCase().includes("humza")) return false;
+      if (creatorName.toLowerCase().includes(USER_NAME.split(" ")[0].toLowerCase())) return false;
     }
     if (selectedFolder && n.parent_folder_id !== selectedFolder) return false;
     if (search) {

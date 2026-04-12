@@ -27,9 +27,11 @@ const statusColors: Record<string, string> = {
   blocked: "text-t-warning",
 };
 
+const DEVIN_BASE = process.env.NEXT_PUBLIC_DEVIN_ENTERPRISE_URL || "https://app.devin.ai";
+
 function devinSessionUrl(sessionId: string): string {
   const id = sessionId.replace(/^devin-/, "");
-  return `https://bilt.devinenterprise.com/sessions/${id}`;
+  return `${DEVIN_BASE}/sessions/${id}`;
 }
 
 function slackToMarkdown(text: string): string {

@@ -12,7 +12,7 @@ import KnowledgePanel from "@/components/KnowledgePanel";
 import SettingsPanel from "@/components/SettingsPanel";
 
 const POLL_INTERVAL = 15_000;
-const USER_EMAIL = "humza.mujib@bilt.com";
+const USER_EMAIL = process.env.NEXT_PUBLIC_DEVIN_USER_EMAIL || "";
 
 const SESSION_COLORS = [
   "#2B6CB0", "#16794A", "#A16207", "#9333EA", "#DC2626", "#0891B2",

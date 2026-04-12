@@ -21,9 +21,9 @@ export type VaultExport = {
   tickets: LinearTicket[];
 };
 
-const VAULT_API_URL =
-  "https://api.github.com/repos/humzamujib/ai-vault/contents/linear/tickets.json";
-const LINEAR_SYNC_PLAYBOOK = "playbook-d18aaca0c237457daaa651eb40677a8d";
+const VAULT_REPO = process.env.LINEAR_VAULT_REPO || "";
+const VAULT_API_URL = `https://api.github.com/repos/${VAULT_REPO}/contents/linear/tickets.json`;
+const LINEAR_SYNC_PLAYBOOK = process.env.LINEAR_SYNC_PLAYBOOK_ID || "";
 const ACTIONABLE_STATUSES = ["Backlog"];
 
 function getGitHubHeaders(): HeadersInit {
