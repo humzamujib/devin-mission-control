@@ -242,7 +242,10 @@ export default function Home() {
             onClose={() => setShowLinear(false)}
             onCreateSession={handleLinearToDevin}
             activeSessionTitles={sessions
-              .filter((s) => s.status_enum !== "finished" && s.status_enum !== "stopped")
+              .filter((s) =>
+                (s.status_enum !== "finished" && s.status_enum !== "stopped") ||
+                s.pull_request
+              )
               .map((s) => s.title || "")}
           />
         </>
