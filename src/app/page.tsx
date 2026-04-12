@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { DevinSession } from "@/types";
 import { getStoredTheme, applyTheme, type ThemeId } from "@/lib/themes";
 import Header from "@/components/Header";
@@ -28,12 +28,27 @@ export default function Home() {
   const [createPrompt, setCreatePrompt] = useState("");
   const [openSessionIds, setOpenSessionIds] = useState<string[]>([]);
   const [boardExpanded, setBoardExpanded] = useState(true);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const stored = localStorage.getItem("mc_dismissed_ids");
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  const msgCountsRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     const stored = getStoredTheme();
     setTheme(stored);
     applyTheme(stored);
   }, []);
+
+  // Persist dismissed IDs
+  useEffect(() => {
+    localStorage.setItem("mc_dismissed_ids", JSON.stringify([...dismissedIds]));
+  }, [dismissedIds]);
 
   function handleThemeChange(id: ThemeId) {
     setTheme(id);
@@ -51,11 +66,41 @@ export default function Home() {
       }
       const data = await res.json();
       const list = Array.isArray(data) ? data : data.sessions ?? [];
-      setSessions(
-        list.map((s: Record<string, unknown>) => normalizeSession(s))
+      const normalized = list.map((s: Record<string, unknown>) =>
+        normalizeSession(s)
       );
+      setSessions(normalized);
       setLastRefresh(new Date());
       setError(null);
+
+      // Clean up dismissed IDs: remove sessions that actually finished,
+      // and pop-back sessions where Devin replied (updated_at changed)
+      setDismissedIds((prev) => {
+        if (prev.size === 0) return prev;
+        const next = new Set(prev);
+        for (const s of normalized) {
+          if (!next.has(s.session_id)) continue;
+          // Session actually finished — remove from dismissed unless it has a PR
+          if (s.status_enum === "finished" || s.status_enum === "stopped") {
+            if (!s.pull_request) {
+              next.delete(s.session_id);
+            }
+            continue;
+          }
+          // Pop-back: Devin replied while dismissed
+          if (s.status_enum === "blocked") {
+            const prevTime = msgCountsRef.current[s.session_id];
+            const curTime = s.updated_at;
+            if (prevTime && curTime !== prevTime) {
+              next.delete(s.session_id);
+            }
+          }
+        }
+        for (const s of normalized) {
+          msgCountsRef.current[s.session_id] = s.updated_at;
+        }
+        return next.size === prev.size ? prev : next;
+      });
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to fetch sessions"
@@ -88,6 +133,11 @@ export default function Home() {
     fetchSessions();
   }
 
+  function handleWrapUp(id: string) {
+    setDismissedIds((prev) => new Set([...prev, id]));
+    handleCloseSession(id);
+  }
+
   async function handleCreateSession(prompt: string) {
     await fetch("/api/devin/sessions", {
       method: "POST",
@@ -113,7 +163,10 @@ export default function Home() {
         onToggleLinear={() => setShowLinear((v) => !v)}
         sessionCount={
           sessions.filter(
-            (s) => s.status_enum !== "finished" && s.status_enum !== "stopped"
+            (s) =>
+              s.status_enum !== "finished" &&
+              s.status_enum !== "stopped" &&
+              !dismissedIds.has(s.session_id)
           ).length
         }
         lastRefresh={lastRefresh}
@@ -137,6 +190,7 @@ export default function Home() {
                 <KanbanBoard
                   sessions={sessions}
                   openSessionIds={openSessionIds}
+                  dismissedIds={dismissedIds}
                   onSelectSession={handleOpenSession}
                 />
               )}
@@ -146,9 +200,11 @@ export default function Home() {
             openSessionIds={openSessionIds}
             sessions={sessions}
             boardExpanded={boardExpanded}
+            dismissedIds={dismissedIds}
             onToggleBoard={() => setBoardExpanded((v) => !v)}
             onClose={handleCloseSession}
             onTerminate={handleTerminateSession}
+            onWrapUp={handleWrapUp}
           />
           <CreateSessionModal
             open={showCreate}

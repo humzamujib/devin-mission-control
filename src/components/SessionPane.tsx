@@ -14,8 +14,10 @@ type SessionMessage = {
 
 type SessionPaneProps = {
   session: DevinSession;
+  isDismissed?: boolean;
   onClose: (id: string) => void;
   onTerminate: (id: string) => void;
+  onWrapUp: (id: string) => void;
 };
 
 const statusColors: Record<string, string> = {
@@ -50,12 +52,15 @@ function isUserMessage(msg: SessionMessage): boolean {
 
 export default function SessionPane({
   session,
+  isDismissed,
   onClose,
   onTerminate,
+  onWrapUp,
 }: SessionPaneProps) {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [terminating, setTerminating] = useState(false);
+  const [sleeping, setSleeping] = useState(false);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [messages, setMessages] = useState<SessionMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -221,17 +226,18 @@ export default function SessionPane({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Footer: terminate + send */}
+      {/* Footer */}
       <div className="shrink-0 border-t border-t-border">
         {session.status_enum !== "finished" &&
           session.status_enum !== "stopped" && (
-            <div className="flex items-center gap-2 px-3 py-1.5">
+            <div className="flex flex-col gap-1.5 px-3 py-1.5">
+              {/* Message input */}
               {(session.status_enum === "working" ||
                 session.status_enum === "running" ||
                 session.status_enum === "blocked") && (
                 <form
                   onSubmit={handleSendMessage}
-                  className="flex flex-1 gap-1.5"
+                  className="flex gap-1.5"
                 >
                   <input
                     value={message}
@@ -248,22 +254,54 @@ export default function SessionPane({
                   </button>
                 </form>
               )}
-              <button
-                onClick={async () => {
-                  if (!confirm("Terminate this session?")) return;
-                  setTerminating(true);
-                  await fetch(
-                    `/api/devin/sessions/${session.session_id}`,
-                    { method: "DELETE" }
-                  );
-                  setTerminating(false);
-                  onTerminate(session.session_id);
-                }}
-                disabled={terminating}
-                className="shrink-0 rounded border border-t-error/30 px-2 py-1 text-[10px] text-t-error hover:bg-t-error/10 disabled:opacity-50"
-              >
-                {terminating ? "..." : "Stop"}
-              </button>
+              {/* Actions */}
+              <div className="flex items-center gap-2">
+                {session.status_enum === "blocked" && !isDismissed && (
+                  <button
+                    onClick={() => onWrapUp(session.session_id)}
+                    className="rounded bg-t-accent-dim/15 px-2 py-1 text-[10px] font-medium text-t-accent-dim hover:bg-t-accent-dim/25"
+                  >
+                    Move to Idle
+                  </button>
+                )}
+                {session.status_enum === "blocked" && isDismissed && (
+                  <button
+                    onClick={async () => {
+                      setSleeping(true);
+                      await fetch(
+                        `/api/devin/sessions/${session.session_id}/message`,
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ message: "sleep" }),
+                        }
+                      );
+                      setSleeping(false);
+                      onClose(session.session_id);
+                    }}
+                    disabled={sleeping}
+                    className="rounded bg-t-info/15 px-2 py-1 text-[10px] font-medium text-t-info hover:bg-t-info/25 disabled:opacity-50"
+                  >
+                    {sleeping ? "Sleeping..." : "Sleep"}
+                  </button>
+                )}
+                <button
+                  onClick={async () => {
+                    if (!confirm("Terminate this session? This cannot be undone.")) return;
+                    setTerminating(true);
+                    await fetch(
+                      `/api/devin/sessions/${session.session_id}`,
+                      { method: "DELETE" }
+                    );
+                    setTerminating(false);
+                    onTerminate(session.session_id);
+                  }}
+                  disabled={terminating}
+                  className="text-[10px] text-t-text-muted hover:text-t-error disabled:opacity-50"
+                >
+                  {terminating ? "..." : "Terminate"}
+                </button>
+              </div>
             </div>
           )}
       </div>

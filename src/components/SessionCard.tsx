@@ -5,6 +5,7 @@ import type { DevinSession } from "@/types";
 type SessionCardProps = {
   session: DevinSession;
   isOpen?: boolean;
+  displayStatus?: string;
   onClick: (session: DevinSession) => void;
 };
 
@@ -26,14 +27,16 @@ const statusColors: Record<string, string> = {
   finished: "bg-t-info",
   stopped: "bg-t-error",
   blocked: "bg-t-warning",
+  idle: "bg-t-accent-dim",
 };
 
-export default function SessionCard({ session, isOpen, onClick }: SessionCardProps) {
+export default function SessionCard({ session, isOpen, displayStatus, onClick }: SessionCardProps) {
   const title =
     session.structured_output?.title ||
     session.title ||
     `Session ${session.session_id.slice(0, 8)}`;
-  const dotColor = statusColors[session.status_enum] || "bg-t-text-muted";
+  const shownStatus = displayStatus || session.status_enum;
+  const dotColor = statusColors[shownStatus] || "bg-t-text-muted";
 
   return (
     <button
@@ -48,7 +51,7 @@ export default function SessionCard({ session, isOpen, onClick }: SessionCardPro
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${dotColor}`} />
           <span className="text-xs font-medium uppercase tracking-wider text-t-text-muted">
-            {session.status_enum}
+            {shownStatus}
           </span>
         </div>
         <span className="text-xs text-t-text-muted">
@@ -59,9 +62,19 @@ export default function SessionCard({ session, isOpen, onClick }: SessionCardPro
         {title}
       </p>
       {session.pull_request && (
-        <span className="inline-block mt-1 rounded bg-t-border px-2 py-0.5 text-xs text-t-accent">
-          PR #{session.pull_request.url.split("/").pop()}
-        </span>
+        <a
+          href={session.pull_request.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className={`inline-flex items-center gap-1 mt-1 rounded px-2 py-0.5 text-xs ${
+            displayStatus === "idle"
+              ? "bg-t-success/15 text-t-success font-medium"
+              : "bg-t-border text-t-accent"
+          }`}
+        >
+          {displayStatus === "idle" ? "PR ready" : "PR"} #{session.pull_request.url.split("/").pop()}
+        </a>
       )}
       {session.requesting_user_email && (
         <p className="mt-1 text-xs text-t-text-muted truncate">

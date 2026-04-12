@@ -9,7 +9,7 @@ export type SessionStatus =
   | "suspended"
   | "unknown";
 
-export type KanbanColumnId = "queued" | "running" | "blocked" | "finished";
+export type KanbanColumnId = "queued" | "running" | "blocked" | "idle" | "finished";
 
 export type DevinSession = {
   session_id: string;

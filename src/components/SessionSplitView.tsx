@@ -8,8 +8,10 @@ type SessionSplitViewProps = {
   sessions: DevinSession[];
   boardExpanded: boolean;
   onToggleBoard: () => void;
+  dismissedIds: Set<string>;
   onClose: (id: string) => void;
   onTerminate: (id: string) => void;
+  onWrapUp: (id: string) => void;
 };
 
 export default function SessionSplitView({
@@ -17,8 +19,10 @@ export default function SessionSplitView({
   sessions,
   boardExpanded,
   onToggleBoard,
+  dismissedIds,
   onClose,
   onTerminate,
+  onWrapUp,
 }: SessionSplitViewProps) {
   if (openSessionIds.length === 0) return null;
 
@@ -49,8 +53,10 @@ export default function SessionSplitView({
           <SessionPane
             key={session.session_id}
             session={session}
+            isDismissed={dismissedIds.has(session.session_id)}
             onClose={onClose}
             onTerminate={onTerminate}
+            onWrapUp={onWrapUp}
           />
         ))}
       </div>
