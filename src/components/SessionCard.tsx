@@ -5,6 +5,7 @@ import type { DevinSession } from "@/types";
 type SessionCardProps = {
   session: DevinSession;
   isOpen?: boolean;
+  accentColor?: string;
   displayStatus?: string;
   onClick: (session: DevinSession) => void;
 };
@@ -30,7 +31,7 @@ const statusColors: Record<string, string> = {
   idle: "bg-t-accent-dim",
 };
 
-export default function SessionCard({ session, isOpen, displayStatus, onClick }: SessionCardProps) {
+export default function SessionCard({ session, isOpen, accentColor, displayStatus, onClick }: SessionCardProps) {
   const title =
     session.structured_output?.title ||
     session.title ||
@@ -41,9 +42,10 @@ export default function SessionCard({ session, isOpen, displayStatus, onClick }:
   return (
     <button
       onClick={() => onClick(session)}
+      style={isOpen && accentColor ? { borderLeftColor: accentColor } : undefined}
       className={`w-full rounded-lg p-3 text-left transition-all ${
         isOpen
-          ? "bg-t-primary/5 ring-1 ring-t-primary/40 shadow-sm"
+          ? "border-l-[3px] bg-t-primary/5 shadow-sm"
           : "bg-t-surface shadow-sm hover:shadow-md hover:bg-t-surface-hover"
       }`}
     >

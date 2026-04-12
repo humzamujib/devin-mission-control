@@ -14,7 +14,12 @@ import SettingsPanel from "@/components/SettingsPanel";
 const POLL_INTERVAL = 15_000;
 const USER_EMAIL = "humza.mujib@bilt.com";
 
+const SESSION_COLORS = [
+  "#2B6CB0", "#16794A", "#A16207", "#9333EA", "#DC2626", "#0891B2",
+];
+
 type Tab = "sessions" | "knowledge" | "settings";
+export type LayoutMode = "board" | "split" | "focus";
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>("sessions");
@@ -27,7 +32,7 @@ export default function Home() {
   const [showLinear, setShowLinear] = useState(false);
   const [createPrompt, setCreatePrompt] = useState("");
   const [openSessionIds, setOpenSessionIds] = useState<string[]>([]);
-  const [boardExpanded, setBoardExpanded] = useState(true);
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>("board");
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
     try {
@@ -117,15 +122,25 @@ export default function Home() {
   }, [fetchSessions]);
 
   function handleOpenSession(session: DevinSession) {
-    setOpenSessionIds((ids) =>
-      ids.includes(session.session_id)
-        ? ids
-        : [...ids, session.session_id]
-    );
+    setOpenSessionIds((ids) => {
+      if (ids.includes(session.session_id)) {
+        // Toggle off
+        const next = ids.filter((i) => i !== session.session_id);
+        if (next.length === 0) setLayoutMode("board");
+        return next;
+      }
+      // Toggle on
+      if (ids.length === 0) setLayoutMode("split");
+      return [...ids, session.session_id];
+    });
   }
 
   function handleCloseSession(id: string) {
-    setOpenSessionIds((ids) => ids.filter((i) => i !== id));
+    setOpenSessionIds((ids) => {
+      const next = ids.filter((i) => i !== id);
+      if (next.length === 0) setLayoutMode("board");
+      return next;
+    });
   }
 
   function handleTerminateSession(id: string) {
@@ -153,6 +168,10 @@ export default function Home() {
   }
 
   const hasOpenSessions = openSessionIds.length > 0;
+  const colorMap: Record<string, string> = {};
+  openSessionIds.forEach((id, i) => {
+    colorMap[id] = SESSION_COLORS[i % SESSION_COLORS.length];
+  });
 
   return (
     <div className="flex h-screen flex-col bg-t-bg text-t-text">
@@ -180,8 +199,8 @@ export default function Home() {
               {error}
             </div>
           )}
-          {(!hasOpenSessions || boardExpanded) && (
-            <div className={`overflow-hidden ${hasOpenSessions ? "h-1/2 shrink-0" : "flex-1"}`}>
+          {(layoutMode === "board" || layoutMode === "split") && (
+            <div className={`overflow-hidden ${layoutMode === "split" ? "h-1/2 shrink-0" : "flex-1"}`}>
               {loading ? (
                 <div className="flex h-full items-center justify-center">
                   <p className="text-t-text-muted">Loading sessions...</p>
@@ -191,6 +210,7 @@ export default function Home() {
                   sessions={sessions}
                   openSessionIds={openSessionIds}
                   dismissedIds={dismissedIds}
+                  colorMap={colorMap}
                   onSelectSession={handleOpenSession}
                 />
               )}
@@ -199,9 +219,10 @@ export default function Home() {
           <SessionSplitView
             openSessionIds={openSessionIds}
             sessions={sessions}
-            boardExpanded={boardExpanded}
+            layoutMode={layoutMode}
+            onLayoutChange={setLayoutMode}
             dismissedIds={dismissedIds}
-            onToggleBoard={() => setBoardExpanded((v) => !v)}
+            colorMap={colorMap}
             onClose={handleCloseSession}
             onTerminate={handleTerminateSession}
             onWrapUp={handleWrapUp}

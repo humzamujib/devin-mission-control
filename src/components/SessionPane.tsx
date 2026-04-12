@@ -15,6 +15,7 @@ type SessionMessage = {
 type SessionPaneProps = {
   session: DevinSession;
   isDismissed?: boolean;
+  accentColor?: string;
   onClose: (id: string) => void;
   onTerminate: (id: string) => void;
   onWrapUp: (id: string) => void;
@@ -53,6 +54,7 @@ function isUserMessage(msg: SessionMessage): boolean {
 export default function SessionPane({
   session,
   isDismissed,
+  accentColor,
   onClose,
   onTerminate,
   onWrapUp,
@@ -113,7 +115,10 @@ export default function SessionPane({
   }
 
   return (
-    <div className="flex flex-1 min-w-0 flex-col border-r border-t-border last:border-r-0 overflow-hidden">
+    <div
+      style={accentColor ? { borderTopColor: accentColor } : undefined}
+      className={`flex flex-1 min-w-0 flex-col border-r border-t-border last:border-r-0 overflow-hidden ${accentColor ? "border-t-[3px]" : ""}`}
+    >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-t-border px-3 py-2 shrink-0">
         <div className="flex items-center gap-2 min-w-0">

@@ -7,6 +7,7 @@ type KanbanBoardProps = {
   sessions: DevinSession[];
   openSessionIds: string[];
   dismissedIds: Set<string>;
+  colorMap: Record<string, string>;
   onSelectSession: (session: DevinSession) => void;
 };
 
@@ -65,6 +66,7 @@ export default function KanbanBoard({
   sessions,
   openSessionIds,
   dismissedIds,
+  colorMap,
   onSelectSession,
 }: KanbanBoardProps) {
   const kanbanColumns = groupSessions(sessions, dismissedIds);
@@ -100,6 +102,7 @@ export default function KanbanBoard({
                   key={session.session_id}
                   session={session}
                   isOpen={openSessionIds.includes(session.session_id)}
+                  accentColor={colorMap[session.session_id]}
                   displayStatus={column.id === "idle" ? "idle" : undefined}
                   onClick={onSelectSession}
                 />
