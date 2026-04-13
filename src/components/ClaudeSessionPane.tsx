@@ -1,13 +1,21 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import type { ClaudeSession } from "@/types/claude-session";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+
+type DisplayMessage = {
+  type: "assistant" | "user" | "tool" | "result" | "ask_user" | "system";
+  text: string;
+  timestamp: string;
+  toolName?: string;
+};
 
 type ClaudeSessionPaneProps = {
   session: ClaudeSession;
@@ -24,19 +32,99 @@ export default function ClaudeSessionPane({
   onUpdate,
   onDelete,
 }: ClaudeSessionPaneProps) {
+  const [messages, setMessages] = useState<DisplayMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [connected, setConnected] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messages = session.messages || [];
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  const isSdkSession = session.id.startsWith("sdk-");
+
+  // Connect to SSE stream for SDK sessions
+  useEffect(() => {
+    if (!isSdkSession) return;
+
+    const es = new EventSource(`/api/claude/sessions/${session.id}/stream`);
+    eventSourceRef.current = es;
+    setConnected(true);
+
+    es.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data) as DisplayMessage;
+        setMessages((prev) => [...prev, msg]);
+
+        if (msg.type === "result") {
+          onUpdate(session.id, { status: "done" });
+          es.close();
+          setConnected(false);
+        } else if (msg.type === "ask_user") {
+          onUpdate(session.id, { status: "blocked" });
+        }
+      } catch {
+        // Skip non-JSON messages (heartbeats)
+      }
+    };
+
+    es.onerror = () => {
+      setConnected(false);
+      es.close();
+    };
+
+    return () => {
+      es.close();
+      eventSourceRef.current = null;
+    };
+  }, [isSdkSession, session.id, onUpdate]);
+
+  // For auto-discovered sessions, use the messages from props
+  useEffect(() => {
+    if (!isSdkSession && session.messages) {
+      setMessages(
+        session.messages.map((m) => ({
+          type: m.role === "user" ? "user" : "assistant",
+          text: m.text,
+          timestamp: m.timestamp,
+        }))
+      );
+    }
+  }, [isSdkSession, session.messages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView();
   }, [messages.length]);
 
-  const statusBadge =
-    session.status === "blocked"
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault();
+    if (!input.trim() || !isSdkSession) return;
+
+    setSending(true);
+    await fetch(`/api/claude/sessions/${session.id}/respond`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: input }),
+    });
+    setInput("");
+    setSending(false);
+    onUpdate(session.id, { status: "running" });
+  }
+
+  async function handleStop() {
+    await fetch(`/api/claude/sessions/${session.id}/stop`, {
+      method: "POST",
+    });
+    onUpdate(session.id, { status: "done" });
+  }
+
+  const isWaiting = session.status === "blocked";
+  const isRunning = session.status === "running";
+  const isDone = session.status === "done";
+
+  const statusBadge = isRunning
+    ? "bg-purple-500/15 text-purple-600 border-purple-500/30"
+    : isWaiting
       ? "bg-t-warning/15 text-t-warning border-t-warning/30"
-      : session.status === "running"
-        ? "bg-purple-500/15 text-purple-600 border-purple-500/30"
-        : "bg-t-text-muted/15 text-t-text-muted border-t-text-muted/30";
+      : "bg-t-text-muted/15 text-t-text-muted border-t-text-muted/30";
 
   return (
     <div
@@ -46,15 +134,16 @@ export default function ClaudeSessionPane({
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <Badge className={statusBadge}>
-            claude
-          </Badge>
+          <Badge className={statusBadge}>claude</Badge>
           <span
             className="text-xs font-medium text-t-text-bright truncate"
             title={session.title}
           >
             {session.title}
           </span>
+          {isSdkSession && connected && isRunning && (
+            <span className="h-1.5 w-1.5 rounded-full bg-purple-500 animate-pulse" />
+          )}
         </div>
         <Button
           variant="ghost"
@@ -71,9 +160,23 @@ export default function ClaudeSessionPane({
       {/* Info bar */}
       <div className="flex items-center gap-2 px-3 h-8 text-[10px] text-t-text-muted shrink-0">
         <span>{session.repo}</span>
-        {session.pid && <span>PID {session.pid}</span>}
+        {isSdkSession && <span>{connected ? "connected" : "disconnected"}</span>}
+        {!isSdkSession && session.pid && <span>PID {session.pid}</span>}
         <span>{session.status}</span>
       </div>
+
+      {isWaiting && (
+        <>
+          <Separator />
+          <div className="px-3 py-2 shrink-0">
+            <div className="rounded-lg border border-t-warning/30 bg-t-warning/10 px-3 py-2 text-center">
+              <p className="text-xs font-medium text-t-warning">
+                Needs your response
+              </p>
+            </div>
+          </div>
+        </>
+      )}
 
       <Separator />
 
@@ -81,8 +184,38 @@ export default function ClaudeSessionPane({
       <ScrollArea className="flex-1 min-h-0">
         <div className="flex flex-col gap-2 px-3 py-2">
           {messages.length > 0 ? (
-            messages.map((msg, i) => {
-                const fromUser = msg.role === "user";
+            messages
+              .filter((m) => m.type !== "system")
+              .map((msg, i) => {
+                if (msg.type === "tool") {
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-center gap-1.5 px-2 py-1 rounded bg-t-surface-hover text-[9px] text-t-text-muted"
+                    >
+                      <span className="font-mono">{msg.toolName}</span>
+                      <span className="truncate">{msg.text}</span>
+                    </div>
+                  );
+                }
+
+                if (msg.type === "result") {
+                  return (
+                    <div
+                      key={i}
+                      className="rounded-lg border border-t-border bg-t-surface px-3 py-2 text-center"
+                    >
+                      <p className="text-[10px] text-t-text-muted">
+                        Session ended
+                      </p>
+                      <div className="prose-messages text-xs text-t-text mt-1">
+                        <ReactMarkdown>{msg.text}</ReactMarkdown>
+                      </div>
+                    </div>
+                  );
+                }
+
+                const fromUser = msg.type === "user";
                 return (
                   <div
                     key={i}
@@ -129,51 +262,79 @@ export default function ClaudeSessionPane({
               })
           ) : (
             <p className="text-xs text-t-text-muted py-4 text-center">
-              No messages yet
+              {isSdkSession ? "Starting session..." : "No messages yet"}
             </p>
-          )}
-          {session.status === "blocked" && (
-            <div className="rounded-lg border border-t-warning/30 bg-t-warning/10 px-3 py-2 text-center">
-              <p className="text-xs font-medium text-t-warning">
-                Needs your response
-              </p>
-            </div>
           )}
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
 
-      {/* Footer */}
-      <Separator />
-      <div className="shrink-0 px-3 py-2 flex items-center gap-2">
-        {session.cwd && (
-          <button
-            onClick={async () => {
-              if (!confirm(`Kill all claude processes in ${session.repo}?`)) return;
-              await fetch("/api/local/kill", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ cwd: session.cwd }),
-              });
-              onClose(session.id);
-            }}
-            className="text-[10px] text-t-text-muted hover:text-t-error"
-          >
-            Kill
-          </button>
-        )}
-        {session.source === "manual" && (
-          <button
-            onClick={() => {
-              if (!confirm("Delete this session?")) return;
-              onDelete(session.id);
-            }}
-            className="text-[10px] text-t-text-muted hover:text-t-error"
-          >
-            Delete
-          </button>
-        )}
-      </div>
+      {/* Footer — input for SDK sessions */}
+      {isSdkSession && !isDone && (
+        <>
+          <Separator />
+          <div className="shrink-0 px-3 py-2">
+            <form onSubmit={handleSend} className="flex gap-1.5 mb-1.5">
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={
+                  isWaiting ? "Respond to Claude..." : "Send a message..."
+                }
+                className="h-8 text-xs"
+              />
+              <Button
+                type="submit"
+                size="sm"
+                disabled={sending || !input.trim()}
+                className="h-8 px-3 text-xs"
+              >
+                {sending ? "..." : "Send"}
+              </Button>
+            </form>
+            <div className="flex items-center gap-2">
+              {isRunning && (
+                <button
+                  onClick={handleStop}
+                  className="text-[10px] text-t-text-muted hover:text-t-error"
+                >
+                  Stop
+                </button>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Footer for auto-discovered sessions */}
+      {!isSdkSession && (
+        <>
+          <Separator />
+          <div className="shrink-0 px-3 py-2 flex items-center gap-2">
+            {session.cwd && (
+              <button
+                onClick={async () => {
+                  if (
+                    !confirm(
+                      `Kill all claude processes in ${session.repo}?`
+                    )
+                  )
+                    return;
+                  await fetch("/api/local/kill", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ cwd: session.cwd }),
+                  });
+                  onClose(session.id);
+                }}
+                className="text-[10px] text-t-text-muted hover:text-t-error"
+              >
+                Kill
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

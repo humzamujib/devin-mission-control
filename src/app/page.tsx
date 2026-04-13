@@ -93,7 +93,28 @@ export default function Home() {
         })
       );
 
-      setClaudeSessions(discovered);
+      // Merge auto-discovered + SDK sessions
+      // Fetch SDK session statuses
+      let sdkSessions: ClaudeSession[] = [];
+      try {
+        const sdkRes = await fetch("/api/claude/sessions");
+        const sdkData = await sdkRes.json();
+        sdkSessions = (sdkData.sessions || []).map(
+          (s: { id: string; repo: string; title: string; status: string; createdAt: string }) => ({
+            id: s.id,
+            title: s.title,
+            repo: s.repo,
+            branch: "",
+            status: s.status === "waiting" ? "blocked" : s.status === "done" ? "done" : "running",
+            created_at: s.createdAt,
+            updated_at: new Date().toISOString(),
+            notes: "",
+            source: "auto" as const,
+          })
+        );
+      } catch {}
+
+      setClaudeSessions([...discovered, ...sdkSessions]);
     } catch {
       // Local API unavailable
     }
@@ -224,22 +245,44 @@ export default function Home() {
 
   // === Claude actions ===
 
-  function handleCreateClaude(data: {
+  async function handleCreateClaude(data: {
     title: string;
     repo: string;
     notes: string;
   }) {
-    // Launch claude with the prompt — auto-discovery picks it up on next poll
     const prompt = data.notes
       ? `${data.title}\n\n${data.notes}`
       : data.title;
-    fetch("/api/local/launch-claude", {
+
+    // Create an SDK session
+    const res = await fetch("/api/claude/sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ repo: data.repo, prompt }),
+      body: JSON.stringify({ prompt, repo: data.repo, title: data.title }),
     });
-    // Trigger an immediate poll to pick up the new session
-    setTimeout(fetchClaudeSessions, 3000);
+    const { id } = await res.json();
+
+    if (id) {
+      // Add SDK session to claude sessions immediately
+      const sdkSession: ClaudeSession = {
+        id,
+        title: data.title,
+        repo: data.repo,
+        branch: "",
+        status: "running",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        notes: "",
+        source: "auto",
+      };
+      setClaudeSessions((prev) => [...prev, sdkSession]);
+
+      // Open the pane
+      setOpenIds((ids) => {
+        if (ids.length === 0) setLayoutMode("split");
+        return [...ids, id];
+      });
+    }
   }
 
   function handleUpdateClaude(id: string, updates: Partial<ClaudeSession>) {
