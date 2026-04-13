@@ -65,6 +65,8 @@ export default function SessionPane({
   const [sending, setSending] = useState(false);
   const [terminating, setTerminating] = useState(false);
   const [sleeping, setSleeping] = useState(false);
+  const [checkoutState, setCheckoutState] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [checkoutInfo, setCheckoutInfo] = useState("");
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [messages, setMessages] = useState<SessionMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -162,14 +164,53 @@ export default function SessionPane({
           <span>{session.requesting_user_email.split("@")[0]}</span>
         )}
         {session.pull_request && (
-          <a
-            href={session.pull_request.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-t-accent hover:text-t-text-bright"
-          >
-            PR #{session.pull_request.url.split("/").pop()}
-          </a>
+          <>
+            <a
+              href={session.pull_request.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-t-accent hover:text-t-text-bright"
+            >
+              PR #{session.pull_request.url.split("/").pop()}
+            </a>
+            <button
+              onClick={async () => {
+                setCheckoutState("loading");
+                setCheckoutInfo("");
+                const res = await fetch("/api/local/checkout", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ pr_url: session.pull_request!.url }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                  setCheckoutState("success");
+                  setCheckoutInfo(data.branch);
+                } else {
+                  setCheckoutState("error");
+                  setCheckoutInfo(data.error || "Failed");
+                }
+                setTimeout(() => setCheckoutState("idle"), 5000);
+              }}
+              disabled={checkoutState === "loading"}
+              className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
+                checkoutState === "success"
+                  ? "bg-t-success/15 text-t-success"
+                  : checkoutState === "error"
+                    ? "bg-t-error/15 text-t-error"
+                    : "bg-t-primary/15 text-t-primary hover:bg-t-primary/25"
+              } disabled:opacity-50`}
+              title={checkoutInfo || "Checkout branch locally"}
+            >
+              {checkoutState === "loading"
+                ? "..."
+                : checkoutState === "success"
+                  ? "Checked out"
+                  : checkoutState === "error"
+                    ? "Failed"
+                    : "Checkout"}
+            </button>
+          </>
         )}
       </div>
 
@@ -235,11 +276,13 @@ export default function SessionPane({
 
       {/* Footer */}
       <div className="shrink-0 border-t border-t-border">
-        {session.status_enum !== "finished" &&
-          session.status_enum !== "stopped" && (
+        {(isDismissed ||
+          (session.status_enum !== "finished" &&
+            session.status_enum !== "stopped")) && (
             <div className="flex flex-col gap-1.5 px-3 py-1.5">
               {/* Message input */}
-              {(session.status_enum === "working" ||
+              {(isDismissed ||
+                session.status_enum === "working" ||
                 session.status_enum === "running" ||
                 session.status_enum === "blocked") && (
                 <form
