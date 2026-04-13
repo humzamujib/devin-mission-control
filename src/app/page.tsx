@@ -114,7 +114,10 @@ export default function Home() {
         );
       } catch {}
 
-      setClaudeSessions([...discovered, ...sdkSessions]);
+      // Filter out auto-discovered sessions that match an SDK session's repo
+      const sdkRepos = new Set(sdkSessions.map((s) => s.repo));
+      const filtered = discovered.filter((d) => !sdkRepos.has(d.repo));
+      setClaudeSessions([...filtered, ...sdkSessions]);
     } catch {
       // Local API unavailable
     }
