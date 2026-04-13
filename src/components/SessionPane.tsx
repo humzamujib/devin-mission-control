@@ -3,6 +3,17 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import type { DevinSession } from "@/types";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 type SessionMessage = {
   type: string;
@@ -21,16 +32,8 @@ type SessionPaneProps = {
   onWrapUp: (id: string) => void;
 };
 
-const statusColors: Record<string, string> = {
-  working: "text-t-success",
-  running: "text-t-success",
-  paused: "text-t-warning",
-  finished: "text-t-info",
-  stopped: "text-t-error",
-  blocked: "text-t-warning",
-};
-
-const DEVIN_BASE = process.env.NEXT_PUBLIC_DEVIN_ENTERPRISE_URL || "https://app.devin.ai";
+const DEVIN_BASE =
+  process.env.NEXT_PUBLIC_DEVIN_ENTERPRISE_URL || "https://app.devin.ai";
 
 function devinSessionUrl(sessionId: string): string {
   const id = sessionId.replace(/^devin-/, "");
@@ -53,6 +56,14 @@ function isUserMessage(msg: SessionMessage): boolean {
   );
 }
 
+const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  working: "default",
+  running: "default",
+  blocked: "secondary",
+  finished: "outline",
+  stopped: "destructive",
+};
+
 export default function SessionPane({
   session,
   isDismissed,
@@ -65,7 +76,9 @@ export default function SessionPane({
   const [sending, setSending] = useState(false);
   const [terminating, setTerminating] = useState(false);
   const [sleeping, setSleeping] = useState(false);
-  const [checkoutState, setCheckoutState] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [checkoutState, setCheckoutState] = useState<
+    "idle" | "loading" | "success" | "error" | "already"
+  >("idle");
   const [checkoutInfo, setCheckoutInfo] = useState("");
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [messages, setMessages] = useState<SessionMessage[]>([]);
@@ -78,7 +91,6 @@ export default function SessionPane({
         setDetail(data);
         if (Array.isArray(data.messages)) {
           setMessages((prev) => {
-            // Only update + scroll if message count changed
             if (prev.length !== data.messages.length) return data.messages;
             return prev;
           });
@@ -97,6 +109,22 @@ export default function SessionPane({
     messagesEndRef.current?.scrollIntoView();
   }, [messages]);
 
+  // Check if PR branch is already checked out locally
+  useEffect(() => {
+    if (!session.pull_request) return;
+    fetch(
+      `/api/local/checkout?pr_url=${encodeURIComponent(session.pull_request.url)}`
+    )
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.checked_out) {
+          setCheckoutState("already");
+          setCheckoutInfo(data.branch);
+        }
+      })
+      .catch(() => {});
+  }, [session.pull_request]);
+
   const title =
     session.structured_output?.title ||
     session.title ||
@@ -114,7 +142,6 @@ export default function SessionPane({
     });
     setMessage("");
     setSending(false);
-    // Refresh messages shortly after sending so it appears
     setTimeout(fetchDetail, 2000);
   }
 
@@ -124,17 +151,11 @@ export default function SessionPane({
       className={`flex flex-1 min-w-0 flex-col border-r border-t-border last:border-r-0 overflow-hidden ${accentColor ? "border-t-[3px]" : ""}`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-t-border px-3 py-2 shrink-0">
+      <div className="flex items-center justify-between px-3 py-2 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <span
-            className={`h-2 w-2 shrink-0 rounded-full ${
-              session.status_enum === "working" || session.status_enum === "running"
-                ? "bg-t-success"
-                : session.status_enum === "blocked"
-                  ? "bg-t-warning"
-                  : "bg-t-info"
-            }`}
-          />
+          <Badge variant={statusVariant[session.status_enum] || "outline"}>
+            {session.status_enum}
+          </Badge>
           <a
             href={sessionUrl}
             target="_blank"
@@ -145,21 +166,20 @@ export default function SessionPane({
             {title}
           </a>
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => onClose(session.session_id)}
-          className="shrink-0 ml-2 text-t-text-muted transition-colors hover:text-t-text-secondary"
+          className="shrink-0 h-6 w-6 p-0 text-t-text-muted hover:text-t-text-secondary"
         >
           &times;
-        </button>
+        </Button>
       </div>
 
-      {/* Compact status bar */}
-      <div className="flex items-center gap-3 border-b border-t-border px-3 py-1.5 text-[10px] text-t-text-muted shrink-0 flex-wrap">
-        <span
-          className={`font-medium uppercase ${statusColors[session.status_enum] || "text-t-text-muted"}`}
-        >
-          {session.status_enum}
-        </span>
+      <Separator />
+
+      {/* Compact info bar */}
+      <div className="flex items-center gap-2 px-3 h-8 text-[10px] text-t-text-muted shrink-0 flex-wrap">
         {session.requesting_user_email && (
           <span>{session.requesting_user_email.split("@")[0]}</span>
         )}
@@ -173,188 +193,236 @@ export default function SessionPane({
             >
               PR #{session.pull_request.url.split("/").pop()}
             </a>
-            <button
-              onClick={async () => {
-                setCheckoutState("loading");
-                setCheckoutInfo("");
-                const res = await fetch("/api/local/checkout", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ pr_url: session.pull_request!.url }),
-                });
-                const data = await res.json();
-                if (data.success) {
-                  setCheckoutState("success");
-                  setCheckoutInfo(data.branch);
-                } else {
-                  setCheckoutState("error");
-                  setCheckoutInfo(data.error || "Failed");
-                }
-                setTimeout(() => setCheckoutState("idle"), 5000);
-              }}
-              disabled={checkoutState === "loading"}
-              className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
-                checkoutState === "success"
-                  ? "bg-t-success/15 text-t-success"
-                  : checkoutState === "error"
-                    ? "bg-t-error/15 text-t-error"
-                    : "bg-t-primary/15 text-t-primary hover:bg-t-primary/25"
-              } disabled:opacity-50`}
-              title={checkoutInfo || "Checkout branch locally"}
-            >
-              {checkoutState === "loading"
-                ? "..."
-                : checkoutState === "success"
-                  ? "Checked out"
-                  : checkoutState === "error"
-                    ? "Failed"
-                    : "Checkout"}
-            </button>
+            <Tooltip>
+              <TooltipTrigger>
+                <button
+                  onClick={async () => {
+                    setCheckoutState("loading");
+                    setCheckoutInfo("");
+                    const res = await fetch("/api/local/checkout", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        pr_url: session.pull_request!.url,
+                      }),
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                      setCheckoutState("already");
+                      setCheckoutInfo(data.branch);
+                    } else {
+                      setCheckoutState("error");
+                      setCheckoutInfo(data.error || "Failed");
+                      setTimeout(() => setCheckoutState("idle"), 5000);
+                    }
+                  }}
+                  disabled={checkoutState === "loading"}
+                  className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
+                    checkoutState === "success" || checkoutState === "already"
+                      ? "bg-t-success/15 text-t-success"
+                      : checkoutState === "error"
+                        ? "bg-t-error/15 text-t-error"
+                        : "bg-t-primary/15 text-t-primary hover:bg-t-primary/25"
+                  } disabled:opacity-50`}
+                >
+                  {checkoutState === "loading"
+                    ? "..."
+                    : checkoutState === "already"
+                      ? "On branch"
+                      : checkoutState === "success"
+                        ? "Checked out"
+                        : checkoutState === "error"
+                          ? "Failed"
+                          : "Checkout"}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>
+                  {checkoutInfo ||
+                    "Fetch and checkout this branch locally"}
+                </p>
+              </TooltipContent>
+            </Tooltip>
           </>
         )}
       </div>
 
       {/* Blocked banner */}
       {session.status_enum === "blocked" && (
-        <div className="border-b border-t-border px-3 py-2 shrink-0">
-          <a
-            href={sessionUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block rounded bg-t-warning px-2 py-0.5 text-[10px] font-medium text-t-bg hover:opacity-90"
-          >
-            Open in Devin to approve
-          </a>
-        </div>
+        <>
+          <Separator />
+          <div className="px-3 py-2 shrink-0">
+            <a
+              href={sessionUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block rounded bg-t-warning px-2 py-0.5 text-[10px] font-medium text-t-bg hover:opacity-90"
+            >
+              Open in Devin to approve
+            </a>
+          </div>
+        </>
       )}
 
+      <Separator />
+
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2">
-        {messages.length > 0 ? (
-          <div className="flex flex-col gap-1.5">
-            {messages.map((msg, i) => {
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="flex flex-col gap-2 px-3 py-2">
+          {messages.length > 0 ? (
+            messages.map((msg, i) => {
               const fromUser = isUserMessage(msg);
               return (
                 <div
                   key={i}
-                  className={`rounded-lg border px-2.5 py-1.5 ${
-                    fromUser
-                      ? "border-t-msg-user-border bg-t-msg-user-bg ml-3"
-                      : "border-t-msg-devin-border bg-t-msg-devin-bg mr-3"
-                  }`}
+                  className={`flex gap-2 ${fromUser ? "flex-row-reverse" : ""}`}
                 >
-                  <div className="mb-0.5 flex items-center gap-1.5">
-                    <span
+                  <Avatar className="h-6 w-6 shrink-0 mt-0.5">
+                    <AvatarFallback
                       className={`text-[9px] font-medium ${
-                        fromUser ? "text-t-accent" : "text-t-text-muted"
+                        fromUser
+                          ? "bg-t-primary/20 text-t-primary"
+                          : "bg-t-surface-hover text-t-text-muted"
                       }`}
                     >
-                      {fromUser ? msg.username || "You" : "Devin"}
-                    </span>
-                    {msg.timestamp && (
-                      <span className="text-[9px] text-t-text-muted/50">
-                        {new Date(msg.timestamp).toLocaleTimeString()}
+                      {fromUser ? "U" : "D"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div
+                    className={`rounded-lg border px-2.5 py-1.5 max-w-[85%] ${
+                      fromUser
+                        ? "border-t-msg-user-border bg-t-msg-user-bg"
+                        : "border-t-msg-devin-border bg-t-msg-devin-bg"
+                    }`}
+                  >
+                    <div className="mb-0.5 flex items-center gap-1.5">
+                      <span
+                        className={`text-[9px] font-medium ${
+                          fromUser ? "text-t-accent" : "text-t-text-muted"
+                        }`}
+                      >
+                        {fromUser ? msg.username || "You" : "Devin"}
                       </span>
-                    )}
-                  </div>
-                  <div className="prose-messages text-xs text-t-text min-w-0 break-words">
-                    <ReactMarkdown>
-                      {slackToMarkdown(msg.message)}
-                    </ReactMarkdown>
+                      {msg.timestamp && (
+                        <span className="text-[9px] text-t-text-muted/50">
+                          {new Date(msg.timestamp).toLocaleTimeString()}
+                        </span>
+                      )}
+                    </div>
+                    <div className="prose-messages text-xs text-t-text min-w-0 break-words">
+                      <ReactMarkdown>
+                        {slackToMarkdown(msg.message)}
+                      </ReactMarkdown>
+                    </div>
                   </div>
                 </div>
               );
-            })}
-          </div>
-        ) : detail ? (
-          <p className="text-xs text-t-text-muted">No messages yet</p>
-        ) : (
-          <p className="text-xs text-t-text-muted">Loading...</p>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+            })
+          ) : detail ? (
+            <p className="text-xs text-t-text-muted py-4 text-center">
+              No messages yet
+            </p>
+          ) : (
+            <p className="text-xs text-t-text-muted py-4 text-center">
+              Loading...
+            </p>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      </ScrollArea>
 
       {/* Footer */}
-      <div className="shrink-0 border-t border-t-border">
-        {(isDismissed ||
-          (session.status_enum !== "finished" &&
-            session.status_enum !== "stopped")) && (
-            <div className="flex flex-col gap-1.5 px-3 py-1.5">
-              {/* Message input */}
-              {(isDismissed ||
-                session.status_enum === "working" ||
-                session.status_enum === "running" ||
-                session.status_enum === "blocked") && (
-                <form
-                  onSubmit={handleSendMessage}
-                  className="flex gap-1.5"
+      {(isDismissed ||
+        (session.status_enum !== "finished" &&
+          session.status_enum !== "stopped")) && (
+        <>
+          <Separator />
+          <div className="shrink-0 px-3 py-2">
+            {/* Message input */}
+            {(isDismissed ||
+              session.status_enum === "working" ||
+              session.status_enum === "running" ||
+              session.status_enum === "blocked") && (
+              <form onSubmit={handleSendMessage} className="flex gap-1.5 mb-1.5">
+                <Input
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Message Devin..."
+                  className="h-8 text-xs"
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={sending || !message.trim()}
+                  className="h-8 px-3 text-xs"
                 >
-                  <input
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Message Devin..."
-                    className="flex-1 rounded border border-t-border bg-t-surface px-2 py-1 text-xs text-t-text placeholder-t-text-muted outline-none focus:border-t-primary"
-                  />
-                  <button
-                    type="submit"
-                    disabled={sending || !message.trim()}
-                    className="rounded bg-t-primary px-2 py-1 text-xs font-medium text-white hover:bg-t-primary-hover disabled:opacity-50"
-                  >
-                    {sending ? "..." : "Send"}
-                  </button>
-                </form>
+                  {sending ? "..." : "Send"}
+                </Button>
+              </form>
+            )}
+            {/* Actions */}
+            <div className="flex items-center gap-2">
+              {session.status_enum === "blocked" && !isDismissed && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onWrapUp(session.session_id)}
+                  className="h-6 text-[10px] text-t-accent-dim"
+                >
+                  Move to Idle
+                </Button>
               )}
-              {/* Actions */}
-              <div className="flex items-center gap-2">
-                {session.status_enum === "blocked" && !isDismissed && (
-                  <button
-                    onClick={() => onWrapUp(session.session_id)}
-                    className="rounded bg-t-accent-dim/15 px-2 py-1 text-[10px] font-medium text-t-accent-dim hover:bg-t-accent-dim/25"
-                  >
-                    Move to Idle
-                  </button>
-                )}
-                {session.status_enum === "blocked" && isDismissed && (
+              {session.status_enum === "blocked" && isDismissed && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={sleeping}
+                  onClick={async () => {
+                    setSleeping(true);
+                    await fetch(
+                      `/api/devin/sessions/${session.session_id}/message`,
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ message: "sleep" }),
+                      }
+                    );
+                    setSleeping(false);
+                    onClose(session.session_id);
+                  }}
+                  className="h-6 text-[10px] text-t-info"
+                >
+                  {sleeping ? "..." : "Sleep"}
+                </Button>
+              )}
+              {session.status_enum !== "finished" &&
+                session.status_enum !== "stopped" && (
                   <button
                     onClick={async () => {
-                      setSleeping(true);
+                      if (
+                        !confirm(
+                          "Terminate this session? This cannot be undone."
+                        )
+                      )
+                        return;
+                      setTerminating(true);
                       await fetch(
-                        `/api/devin/sessions/${session.session_id}/message`,
-                        {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ message: "sleep" }),
-                        }
+                        `/api/devin/sessions/${session.session_id}`,
+                        { method: "DELETE" }
                       );
-                      setSleeping(false);
-                      onClose(session.session_id);
+                      setTerminating(false);
+                      onTerminate(session.session_id);
                     }}
-                    disabled={sleeping}
-                    className="rounded bg-t-info/15 px-2 py-1 text-[10px] font-medium text-t-info hover:bg-t-info/25 disabled:opacity-50"
+                    disabled={terminating}
+                    className="text-[10px] text-t-text-muted hover:text-t-error disabled:opacity-50"
                   >
-                    {sleeping ? "Sleeping..." : "Sleep"}
+                    {terminating ? "..." : "Terminate"}
                   </button>
                 )}
-                <button
-                  onClick={async () => {
-                    if (!confirm("Terminate this session? This cannot be undone.")) return;
-                    setTerminating(true);
-                    await fetch(
-                      `/api/devin/sessions/${session.session_id}`,
-                      { method: "DELETE" }
-                    );
-                    setTerminating(false);
-                    onTerminate(session.session_id);
-                  }}
-                  disabled={terminating}
-                  className="text-[10px] text-t-text-muted hover:text-t-error disabled:opacity-50"
-                >
-                  {terminating ? "..." : "Terminate"}
-                </button>
-              </div>
             </div>
-          )}
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
