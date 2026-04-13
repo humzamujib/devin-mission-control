@@ -1,4 +1,5 @@
 import { query, type Query } from "@anthropic-ai/claude-agent-sdk";
+import { writeSessionRecord, type SessionRecord } from "./vault";
 
 const REPO_BASE_PATH = process.env.REPO_BASE_PATH || "~/Desktop";
 
@@ -54,7 +55,7 @@ export function createSession(opts: {
   const q = query({
     prompt: opts.prompt,
     options: {
-      cwd,
+      additionalDirectories: [cwd],
       model: opts.model || "claude-sonnet-4-20250514",
       tools: { type: "preset", preset: "claude_code" },
       permissionMode: "acceptEdits",
@@ -150,13 +151,44 @@ async function consumeSession(session: SdkSession) {
       }
 
       if (msg.type === "result") {
-        const resultMsg = msg as { result?: string; subtype?: string };
+        const resultMsg = msg as {
+          result?: string;
+          subtype?: string;
+          duration_ms?: number;
+          total_cost_usd?: number;
+        };
         session.status = "done";
         session.messages.push({
           type: "result",
           text: resultMsg.result || "Session ended",
           timestamp: now,
         });
+
+        // Persist to vault
+        const toolsUsed = new Set<string>();
+        for (const m of session.messages) {
+          if (m.type === "tool" && m.toolName) toolsUsed.add(m.toolName);
+        }
+        const record: SessionRecord = {
+          id: session.id,
+          title: session.title,
+          repo: session.repo,
+          prompt: session.messages.find((m) => m.type === "user")?.text || "",
+          result: resultMsg.result || "",
+          status: "done",
+          source: "claude-sdk",
+          created_at: session.createdAt,
+          completed_at: now,
+          duration_ms: resultMsg.duration_ms,
+          cost_usd: resultMsg.total_cost_usd,
+          tools_used: Array.from(toolsUsed),
+          messages: session.messages.map((m) => ({
+            type: m.type,
+            text: m.text,
+            timestamp: m.timestamp,
+          })),
+        };
+        writeSessionRecord(record).catch(() => {});
       }
     }
   } catch (err) {

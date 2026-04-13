@@ -120,3 +120,78 @@ export async function listChangelogs(
     .sort((a, b) => b.name.localeCompare(a.name))
     .slice(0, limit);
 }
+
+// === Session persistence ===
+
+export type SessionRecord = {
+  id: string;
+  title: string;
+  repo: string;
+  prompt: string;
+  result: string;
+  status: string;
+  source: string;
+  model?: string;
+  created_at: string;
+  completed_at: string;
+  duration_ms?: number;
+  cost_usd?: number;
+  tools_used?: string[];
+  messages: { type: string; text: string; timestamp: string }[];
+};
+
+export async function writeSessionRecord(
+  record: SessionRecord
+): Promise<boolean> {
+  const slug = record.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .slice(0, 50);
+  const date = record.completed_at.slice(0, 10);
+  const filename = `${date}-${slug}.json`;
+  const path = `sessions/${filename}`;
+  const content = Buffer.from(JSON.stringify(record, null, 2)).toString(
+    "base64"
+  );
+
+  const token = process.env.GITHUB_TOKEN;
+  if (!token || !VAULT_REPO) return false;
+
+  try {
+    const res = await fetch(`${API_BASE}/${path}`, {
+      method: "PUT",
+      headers: {
+        ...getHeaders(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: `session: ${record.title}`,
+        content,
+      }),
+    });
+    return res.ok || res.status === 201;
+  } catch {
+    return false;
+  }
+}
+
+export async function listSessionRecords(): Promise<SessionRecord[]> {
+  const files = await listDirectory("sessions");
+  const records: SessionRecord[] = [];
+
+  for (const file of files.slice(0, 30)) {
+    if (!file.name.endsWith(".json")) continue;
+    const content = await readFile(file.path);
+    if (!content) continue;
+    try {
+      records.push(JSON.parse(content));
+    } catch {
+      continue;
+    }
+  }
+
+  return records.sort(
+    (a, b) =>
+      new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime()
+  );
+}

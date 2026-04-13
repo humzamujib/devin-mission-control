@@ -18,6 +18,7 @@ import LinearPanel from "@/components/LinearPanel";
 import KnowledgePanel from "@/components/KnowledgePanel";
 import SettingsPanel from "@/components/SettingsPanel";
 import VaultPanel from "@/components/VaultPanel";
+import OrchestratorPanel from "@/components/OrchestratorPanel";
 
 const POLL_INTERVAL = 15_000;
 const USER_EMAIL = process.env.NEXT_PUBLIC_DEVIN_USER_EMAIL || "";
@@ -36,7 +37,7 @@ const KNOWN_REPOS = [
   "devin-mission-control",
 ];
 
-type Tab = "sessions" | "knowledge" | "vault" | "settings";
+type Tab = "sessions" | "knowledge" | "vault" | "orchestrator" | "settings";
 export type LayoutMode = "board" | "split" | "focus";
 
 export default function Home() {
@@ -115,7 +116,9 @@ export default function Home() {
       } catch {}
 
       // Filter out auto-discovered sessions that match an SDK session's repo
+      // or the orchestrator (runs in devin-mission-control)
       const sdkRepos = new Set(sdkSessions.map((s) => s.repo));
+      sdkRepos.add("devin-mission-control");
       const filtered = discovered.filter((d) => !sdkRepos.has(d.repo));
       setClaudeSessions([...filtered, ...sdkSessions]);
     } catch {
@@ -449,6 +452,8 @@ export default function Home() {
       {tab === "knowledge" && <KnowledgePanel />}
 
       {tab === "vault" && <VaultPanel />}
+
+      {tab === "orchestrator" && <OrchestratorPanel />}
 
       {tab === "settings" && (
         <SettingsPanel
