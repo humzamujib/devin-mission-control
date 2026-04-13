@@ -1,13 +1,12 @@
 "use client";
 
-import type { DevinSession } from "@/types";
+import type { BoardCard } from "@/types";
 
 type SessionCardProps = {
-  session: DevinSession;
+  card: BoardCard;
   isOpen?: boolean;
   accentColor?: string;
-  displayStatus?: string;
-  onClick: (session: DevinSession) => void;
+  onClick: () => void;
 };
 
 function timeAgo(dateStr: string): string {
@@ -21,28 +20,25 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-const statusColors: Record<string, string> = {
-  working: "bg-t-success",
-  running: "bg-t-success",
-  paused: "bg-t-warning",
-  finished: "bg-t-info",
-  stopped: "bg-t-error",
-  blocked: "bg-t-warning",
-  idle: "bg-t-accent-dim",
-};
-
-export default function SessionCard({ session, isOpen, accentColor, displayStatus, onClick }: SessionCardProps) {
-  const title =
-    session.structured_output?.title ||
-    session.title ||
-    `Session ${session.session_id.slice(0, 8)}`;
-  const shownStatus = displayStatus || session.status_enum;
-  const dotColor = statusColors[shownStatus] || "bg-t-text-muted";
+export default function SessionCard({
+  card,
+  isOpen,
+  accentColor,
+  onClick,
+}: SessionCardProps) {
+  const sourceBadge =
+    card.source === "claude"
+      ? "bg-purple-500/15 text-purple-600"
+      : "bg-t-success/15 text-t-success";
 
   return (
     <button
-      onClick={() => onClick(session)}
-      style={isOpen && accentColor ? { borderLeftColor: accentColor } : undefined}
+      onClick={onClick}
+      style={
+        isOpen && accentColor
+          ? { borderLeftColor: accentColor }
+          : undefined
+      }
       className={`w-full rounded-lg p-3 text-left transition-all ${
         isOpen
           ? "border-l-[3px] bg-t-primary/5 shadow-sm"
@@ -51,36 +47,46 @@ export default function SessionCard({ session, isOpen, accentColor, displayStatu
     >
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className={`h-2 w-2 rounded-full ${dotColor}`} />
-          <span className="text-xs font-medium uppercase tracking-wider text-t-text-muted">
-            {shownStatus}
+          <span
+            className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${sourceBadge}`}
+          >
+            {card.source}
+          </span>
+          <span className="text-[10px] font-medium uppercase tracking-wider text-t-text-muted">
+            {card.status_display}
           </span>
         </div>
-        <span className="text-xs text-t-text-muted">
-          {timeAgo(session.updated_at)}
+        <span className="text-[10px] text-t-text-muted">
+          {timeAgo(card.updated_at)}
         </span>
       </div>
-      <p className="mb-1 text-sm font-medium text-t-text line-clamp-2">
-        {title}
+      <p className="mb-0.5 text-sm font-medium text-t-text line-clamp-1">
+        {card.title}
       </p>
-      {session.pull_request && (
+      {card.subtitle && (
+        <p className="mb-1 text-[11px] text-t-text-muted line-clamp-1">
+          {card.subtitle}
+        </p>
+      )}
+      {card.pull_request_url && (
         <a
-          href={session.pull_request.url}
+          href={card.pull_request_url}
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           className={`inline-flex items-center gap-1 mt-1 rounded px-2 py-0.5 text-xs ${
-            displayStatus === "idle"
+            card.column === "idle"
               ? "bg-t-success/15 text-t-success font-medium"
               : "bg-t-border text-t-accent"
           }`}
         >
-          {displayStatus === "idle" ? "PR ready" : "PR"} #{session.pull_request.url.split("/").pop()}
+          {card.column === "idle" ? "PR ready" : "PR"} #
+          {card.pull_request_url.split("/").pop()}
         </a>
       )}
-      {session.requesting_user_email && (
-        <p className="mt-1 text-xs text-t-text-muted truncate">
-          {session.requesting_user_email.split("@")[0]}
+      {card.requesting_user && (
+        <p className="mt-1 text-[10px] text-t-text-muted truncate">
+          {card.requesting_user}
         </p>
       )}
     </button>

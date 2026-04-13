@@ -1,19 +1,25 @@
 "use client";
 
 import type { DevinSession } from "@/types";
+import type { ClaudeSession } from "@/types/claude-session";
 import type { LayoutMode } from "@/app/page";
 import SessionPane from "./SessionPane";
+import ClaudeSessionPane from "./ClaudeSessionPane";
 
 type SessionSplitViewProps = {
-  openSessionIds: string[];
-  sessions: DevinSession[];
+  openIds: string[];
+  devinSessions: DevinSession[];
+  claudeSessions: ClaudeSession[];
   layoutMode: LayoutMode;
   onLayoutChange: (mode: LayoutMode) => void;
   dismissedIds: Set<string>;
   colorMap: Record<string, string>;
-  onClose: (id: string) => void;
-  onTerminate: (id: string) => void;
-  onWrapUp: (id: string) => void;
+  onCloseDevin: (id: string) => void;
+  onTerminateDevin: (id: string) => void;
+  onWrapUpDevin: (id: string) => void;
+  onCloseClaude: (id: string) => void;
+  onUpdateClaude: (id: string, updates: Partial<ClaudeSession>) => void;
+  onDeleteClaude: (id: string) => void;
 };
 
 function LayoutIcon({
@@ -50,23 +56,33 @@ function LayoutIcon({
 }
 
 export default function SessionSplitView({
-  openSessionIds,
-  sessions,
+  openIds,
+  devinSessions,
+  claudeSessions,
   layoutMode,
   onLayoutChange,
   dismissedIds,
   colorMap,
-  onClose,
-  onTerminate,
-  onWrapUp,
+  onCloseDevin,
+  onTerminateDevin,
+  onWrapUpDevin,
+  onCloseClaude,
+  onUpdateClaude,
+  onDeleteClaude,
 }: SessionSplitViewProps) {
-  if (openSessionIds.length === 0) return null;
+  if (openIds.length === 0) return null;
 
-  const openSessions = openSessionIds
-    .map((id) => sessions.find((s) => s.session_id === id))
-    .filter(Boolean) as DevinSession[];
+  const panes = openIds
+    .map((id) => {
+      const devin = devinSessions.find((s) => s.session_id === id);
+      if (devin) return { type: "devin" as const, devin };
+      const claude = claudeSessions.find((s) => s.id === id);
+      if (claude) return { type: "claude" as const, claude };
+      return null;
+    })
+    .filter(Boolean);
 
-  if (openSessions.length === 0) return null;
+  if (panes.length === 0) return null;
 
   return (
     <>
@@ -78,9 +94,7 @@ export default function SessionSplitView({
               key={mode}
               onClick={() => onLayoutChange(mode)}
               className={`p-1.5 rounded transition-colors ${
-                layoutMode === mode
-                  ? "bg-t-border"
-                  : "hover:bg-t-border/50"
+                layoutMode === mode ? "bg-t-border" : "hover:bg-t-border/50"
               }`}
               title={mode.charAt(0).toUpperCase() + mode.slice(1)}
             >
@@ -89,24 +103,39 @@ export default function SessionSplitView({
           ))}
         </div>
         <span className="text-[10px] text-t-text-muted">
-          {openSessions.length} session{openSessions.length !== 1 ? "s" : ""} open
+          {panes.length} session{panes.length !== 1 ? "s" : ""} open
         </span>
       </div>
 
       {/* Panel area */}
       {(layoutMode === "split" || layoutMode === "focus") && (
         <div className="flex-1 flex overflow-hidden bg-t-bg min-h-0">
-          {openSessions.map((session) => (
-            <SessionPane
-              key={session.session_id}
-              session={session}
-              isDismissed={dismissedIds.has(session.session_id)}
-              accentColor={colorMap[session.session_id]}
-              onClose={onClose}
-              onTerminate={onTerminate}
-              onWrapUp={onWrapUp}
-            />
-          ))}
+          {panes.map((pane) => {
+            if (!pane) return null;
+            if (pane.type === "devin") {
+              return (
+                <SessionPane
+                  key={pane.devin.session_id}
+                  session={pane.devin}
+                  isDismissed={dismissedIds.has(pane.devin.session_id)}
+                  accentColor={colorMap[pane.devin.session_id]}
+                  onClose={onCloseDevin}
+                  onTerminate={onTerminateDevin}
+                  onWrapUp={onWrapUpDevin}
+                />
+              );
+            }
+            return (
+              <ClaudeSessionPane
+                key={pane.claude.id}
+                session={pane.claude}
+                accentColor={colorMap[pane.claude.id]}
+                onClose={onCloseClaude}
+                onUpdate={onUpdateClaude}
+                onDelete={onDeleteClaude}
+              />
+            );
+          })}
         </div>
       )}
     </>

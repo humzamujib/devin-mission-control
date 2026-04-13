@@ -1,15 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { DevinSession, KanbanColumn, KanbanColumnId } from "@/types";
+import type { BoardCard, KanbanColumn, KanbanColumnId } from "@/types";
 import SessionCard from "./SessionCard";
 
 type KanbanBoardProps = {
-  sessions: DevinSession[];
-  openSessionIds: string[];
-  dismissedIds: Set<string>;
+  cards: BoardCard[];
+  openIds: string[];
   colorMap: Record<string, string>;
-  onSelectSession: (session: DevinSession) => void;
+  onSelectCard: (id: string) => void;
 };
 
 const STORAGE_KEY = "mc_collapsed_columns";
@@ -22,27 +21,8 @@ const columns: { id: KanbanColumnId; title: string; dotColor: string }[] = [
   { id: "finished", title: "Finished", dotColor: "bg-t-info" },
 ];
 
-function classifySession(session: DevinSession, dismissedIds?: Set<string>): KanbanColumnId {
-  if (dismissedIds?.has(session.session_id)) {
-    return "idle";
-  }
-  switch (session.status_enum) {
-    case "working":
-    case "running":
-      return "running";
-    case "paused":
-    case "blocked":
-      return "blocked";
-    case "finished":
-    case "stopped":
-      return "finished";
-    default:
-      return "queued";
-  }
-}
-
-function groupSessions(sessions: DevinSession[], dismissedIds: Set<string>): KanbanColumn[] {
-  const groups: Record<KanbanColumnId, DevinSession[]> = {
+function groupCards(cards: BoardCard[]): KanbanColumn[] {
+  const groups: Record<KanbanColumnId, BoardCard[]> = {
     queued: [],
     running: [],
     blocked: [],
@@ -50,15 +30,14 @@ function groupSessions(sessions: DevinSession[], dismissedIds: Set<string>): Kan
     finished: [],
   };
 
-  for (const session of sessions) {
-    const col = classifySession(session, dismissedIds);
-    groups[col].push(session);
+  for (const card of cards) {
+    groups[card.column].push(card);
   }
 
   return columns.map((col) => ({
     ...col,
     color: col.dotColor,
-    sessions: groups[col.id].sort(
+    cards: groups[col.id].sort(
       (a, b) =>
         new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
     ),
@@ -66,13 +45,12 @@ function groupSessions(sessions: DevinSession[], dismissedIds: Set<string>): Kan
 }
 
 export default function KanbanBoard({
-  sessions,
-  openSessionIds,
-  dismissedIds,
+  cards,
+  openIds,
   colorMap,
-  onSelectSession,
+  onSelectCard,
 }: KanbanBoardProps) {
-  const kanbanColumns = groupSessions(sessions, dismissedIds);
+  const kanbanColumns = groupCards(cards);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
     try {
@@ -100,7 +78,7 @@ export default function KanbanBoard({
     <div className="flex h-full gap-3 overflow-x-auto overflow-y-hidden p-6">
       {kanbanColumns.map((column) => {
         const isCollapsed = collapsed.has(column.id);
-        const count = column.sessions.length;
+        const count = column.cards.length;
 
         if (isCollapsed) {
           return (
@@ -149,14 +127,13 @@ export default function KanbanBoard({
                   No sessions
                 </p>
               ) : (
-                column.sessions.map((session) => (
+                column.cards.map((card) => (
                   <SessionCard
-                    key={session.session_id}
-                    session={session}
-                    isOpen={openSessionIds.includes(session.session_id)}
-                    accentColor={colorMap[session.session_id]}
-                    displayStatus={column.id === "idle" ? "idle" : undefined}
-                    onClick={onSelectSession}
+                    key={card.id}
+                    card={card}
+                    isOpen={openIds.includes(card.id)}
+                    accentColor={colorMap[card.id]}
+                    onClick={() => onSelectCard(card.id)}
                   />
                 ))
               )}

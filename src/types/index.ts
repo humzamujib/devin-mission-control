@@ -30,11 +30,23 @@ export type DevinSession = {
   } | null;
 };
 
+export type BoardCard = {
+  id: string;
+  source: "devin" | "claude";
+  title: string;
+  subtitle?: string;
+  status_display: string;
+  column: KanbanColumnId;
+  updated_at: string;
+  pull_request_url?: string;
+  requesting_user?: string;
+};
+
 export type KanbanColumn = {
   id: KanbanColumnId;
   title: string;
   color: string;
-  sessions: DevinSession[];
+  cards: BoardCard[];
 };
 
 export type CreateSessionRequest = {
