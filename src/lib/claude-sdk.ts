@@ -1,5 +1,5 @@
 import { query, type Query } from "@anthropic-ai/claude-agent-sdk";
-import { writeSessionRecord, type SessionRecord } from "./vault";
+import { writeSessionRecord, writeChangelog, type SessionRecord } from "./vault";
 
 const REPO_BASE_PATH = process.env.REPO_BASE_PATH || "~/Desktop";
 
@@ -188,7 +188,34 @@ async function consumeSession(session: SdkSession) {
             timestamp: m.timestamp,
           })),
         };
-        writeSessionRecord(record).catch(() => {});
+        writeSessionRecord(record).catch((e) =>
+          console.error("[sdk] Failed to write session record:", e)
+        );
+
+        // Write changelog entry
+        const changelogBody = [
+          `---`,
+          `title: "${session.title}"`,
+          `repo: "${session.repo}"`,
+          `source: claude-sdk`,
+          `date: "${now.slice(0, 10)}"`,
+          `duration_ms: ${resultMsg.duration_ms || 0}`,
+          `cost_usd: ${resultMsg.total_cost_usd || 0}`,
+          `tools: [${Array.from(toolsUsed).map((t) => `"${t}"`).join(", ")}]`,
+          `---`,
+          ``,
+          `## ${session.title}`,
+          ``,
+          `**Repo:** ${session.repo}`,
+          `**Prompt:** ${session.messages.find((m) => m.type === "user")?.text?.slice(0, 200) || ""}`,
+          ``,
+          `### Result`,
+          ``,
+          resultMsg.result || "No result text",
+        ].join("\n");
+        writeChangelog(session.title, changelogBody).catch((e) =>
+          console.error("[sdk] Failed to write changelog:", e)
+        );
       }
     }
   } catch (err) {

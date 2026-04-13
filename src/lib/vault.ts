@@ -140,22 +140,18 @@ export type SessionRecord = {
   messages: { type: string; text: string; timestamp: string }[];
 };
 
-export async function writeSessionRecord(
-  record: SessionRecord
+async function writeVaultFile(
+  path: string,
+  content: string,
+  commitMessage: string
 ): Promise<boolean> {
-  const slug = record.title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .slice(0, 50);
-  const date = record.completed_at.slice(0, 10);
-  const filename = `${date}-${slug}.json`;
-  const path = `sessions/${filename}`;
-  const content = Buffer.from(JSON.stringify(record, null, 2)).toString(
-    "base64"
-  );
-
   const token = process.env.GITHUB_TOKEN;
-  if (!token || !VAULT_REPO) return false;
+  if (!token || !VAULT_REPO) {
+    console.error("[vault] Missing GITHUB_TOKEN or VAULT_REPO");
+    return false;
+  }
+
+  const encoded = Buffer.from(content).toString("base64");
 
   try {
     const res = await fetch(`${API_BASE}/${path}`, {
@@ -165,14 +161,54 @@ export async function writeSessionRecord(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        message: `session: ${record.title}`,
-        content,
+        message: commitMessage,
+        content: encoded,
       }),
     });
-    return res.ok || res.status === 201;
-  } catch {
+    if (!res.ok && res.status !== 201) {
+      const err = await res.text();
+      console.error(`[vault] Write failed (${res.status}): ${err.slice(0, 200)}`);
+      return false;
+    }
+    console.log(`[vault] Wrote ${path}`);
+    return true;
+  } catch (err) {
+    console.error(`[vault] Write error:`, err);
     return false;
   }
+}
+
+export async function writeSessionRecord(
+  record: SessionRecord
+): Promise<boolean> {
+  const slug = record.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .slice(0, 50);
+  const date = record.completed_at.slice(0, 10);
+  const filename = `${date}-${slug}.json`;
+  return writeVaultFile(
+    `sessions/${filename}`,
+    JSON.stringify(record, null, 2),
+    `session: ${record.title}`
+  );
+}
+
+export async function writeChangelog(
+  title: string,
+  body: string
+): Promise<boolean> {
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .slice(0, 50);
+  const date = new Date().toISOString().slice(0, 10);
+  const filename = `${date}-${slug}.md`;
+  return writeVaultFile(
+    `changelog/${filename}`,
+    body,
+    `changelog: ${title}`
+  );
 }
 
 export async function listSessionRecords(): Promise<SessionRecord[]> {

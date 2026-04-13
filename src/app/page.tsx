@@ -45,6 +45,7 @@ export default function Home() {
   const [theme, setTheme] = useState<ThemeId>("navy");
   const [devinSessions, setDevinSessions] = useState<DevinSession[]>([]);
   const [claudeSessions, setClaudeSessions] = useState<ClaudeSession[]>([]);
+  const [vaultSessions, setVaultSessions] = useState<BoardCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
@@ -146,6 +147,36 @@ export default function Home() {
     setTheme(id);
     applyTheme(id);
   }
+
+  // === Vault completed sessions ===
+  useEffect(() => {
+    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+    const fetchVaultSessions = async () => {
+      try {
+        const res = await fetch("/api/vault/sessions");
+        const data = await res.json();
+        const cutoff = Date.now() - SEVEN_DAYS;
+        const cards: BoardCard[] = (data.sessions || [])
+          .filter((s: { completed_at: string }) =>
+            new Date(s.completed_at).getTime() > cutoff
+          )
+          .map((s: { id: string; title: string; repo: string; completed_at: string; result: string }) => ({
+            id: `vault-${s.id}`,
+            source: "claude" as const,
+            title: s.title,
+            subtitle: s.result?.slice(0, 80),
+            status_display: "done",
+            column: "finished" as const,
+            updated_at: s.completed_at,
+            requesting_user: s.repo,
+          }));
+        setVaultSessions(cards);
+      } catch {}
+    };
+    fetchVaultSessions();
+    const interval = setInterval(fetchVaultSessions, 60_000);
+    return () => clearInterval(interval);
+  }, []);
 
   // === Devin session management ===
 
@@ -357,8 +388,12 @@ export default function Home() {
       requesting_user: s.repo,
     }));
 
-    return [...devinCards, ...claudeCards];
-  }, [devinSessions, claudeSessions, dismissedIds]);
+    // Dedupe: don't show vault sessions that are still in the active claude list
+    const activeIds = new Set(claudeCards.map((c) => c.id));
+    const filteredVault = vaultSessions.filter((v) => !activeIds.has(v.id));
+
+    return [...devinCards, ...claudeCards, ...filteredVault];
+  }, [devinSessions, claudeSessions, dismissedIds, vaultSessions]);
 
   const hasOpenPanes = openIds.length > 0;
   const colorMap: Record<string, string> = {};
