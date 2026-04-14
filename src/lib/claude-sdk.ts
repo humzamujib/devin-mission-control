@@ -47,30 +47,37 @@ export function createSession(opts: {
   repo: string;
   title: string;
   model?: string;
+  effort?: string;
 }): string {
   const id = `sdk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const abort = new AbortController();
   const cwd = expandHome(`${REPO_BASE_PATH}/${opts.repo}`);
 
+  const sdkOptions: Record<string, unknown> = {
+    additionalDirectories: [cwd],
+    model: opts.model || "claude-sonnet-4-20250514",
+    tools: { type: "preset", preset: "claude_code" },
+    permissionMode: "acceptEdits",
+    abortController: abort,
+    allowedTools: [
+      "Read",
+      "Edit",
+      "Write",
+      "Bash",
+      "Glob",
+      "Grep",
+      "WebSearch",
+      "WebFetch",
+    ],
+  };
+
+  if (opts.effort) {
+    sdkOptions.effort = opts.effort;
+  }
+
   const q = query({
     prompt: opts.prompt,
-    options: {
-      additionalDirectories: [cwd],
-      model: opts.model || "claude-sonnet-4-20250514",
-      tools: { type: "preset", preset: "claude_code" },
-      permissionMode: "acceptEdits",
-      abortController: abort,
-      allowedTools: [
-        "Read",
-        "Edit",
-        "Write",
-        "Bash",
-        "Glob",
-        "Grep",
-        "WebSearch",
-        "WebFetch",
-      ],
-    },
+    options: sdkOptions as Parameters<typeof query>[0]["options"],
   });
 
   const session: SdkSession = {

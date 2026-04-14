@@ -19,7 +19,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { prompt, repo, title, model } = await request.json();
+  const { prompt, repo, title, model, effort } = await request.json();
   if (!prompt || !repo) {
     return Response.json({ error: "Missing prompt or repo" }, { status: 400 });
   }
@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
     repo,
     title: title || prompt.slice(0, 60),
     model,
+    effort,
   });
   return Response.json({ id });
 }

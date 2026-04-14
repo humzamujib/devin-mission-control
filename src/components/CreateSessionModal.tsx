@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MODELS, EFFORT_LEVELS } from "@/lib/model-config";
 
 type Agent = "devin" | "claude";
 
@@ -10,9 +11,12 @@ type CreateSessionModalProps = {
   open: boolean;
   onClose: () => void;
   onSubmitDevin: (prompt: string) => Promise<void>;
-  onSubmitClaude: (data: { title: string; repo: string; notes: string }) => void;
+  onSubmitClaude: (data: { title: string; repo: string; notes: string; model: string; effort: string }) => void;
   initialPrompt?: string;
   repos: string[];
+  defaultModel: string;
+  defaultEffort: string;
+  claudeEnabled?: boolean;
 };
 
 export default function CreateSessionModal({
@@ -22,26 +26,35 @@ export default function CreateSessionModal({
   onSubmitClaude,
   initialPrompt = "",
   repos,
+  defaultModel,
+  defaultEffort,
+  claudeEnabled = true,
 }: CreateSessionModalProps) {
   const [agent, setAgent] = useState<Agent>("devin");
   const [prompt, setPrompt] = useState(initialPrompt);
   const [title, setTitle] = useState("");
   const [repo, setRepo] = useState(repos[0] || "");
   const [notes, setNotes] = useState("");
+  const [model, setModel] = useState(defaultModel);
+  const [effort, setEffort] = useState(defaultEffort);
   const [loading, setLoading] = useState(false);
 
+  // Ensure repo and prompt are properly initialized
   useEffect(() => {
-    if (open && initialPrompt) {
-      setPrompt(initialPrompt);
-      setAgent("devin");
-    }
-  }, [open, initialPrompt]);
+    const timeout = setTimeout(() => {
+      if (initialPrompt !== undefined && initialPrompt !== prompt) {
+        setPrompt(initialPrompt);
+        if (initialPrompt.trim()) {
+          setAgent("devin");
+        }
+      }
+      if (repos.length > 0 && !repo) {
+        setRepo(repos[0]);
+      }
+    }, 0);
 
-  useEffect(() => {
-    if (open && repos.length > 0 && !repo) {
-      setRepo(repos[0]);
-    }
-  }, [open, repos, repo]);
+    return () => clearTimeout(timeout);
+  }, [initialPrompt, repos, prompt, repo]);
 
   if (!open) return null;
 
@@ -54,7 +67,7 @@ export default function CreateSessionModal({
       setPrompt("");
     } else {
       if (!title.trim() || !repo) return;
-      onSubmitClaude({ title, repo, notes });
+      onSubmitClaude({ title, repo, notes, model, effort });
       setTitle("");
       setNotes("");
     }
@@ -70,30 +83,34 @@ export default function CreateSessionModal({
         </h2>
 
         {/* Agent toggle */}
-        <div className="mb-4 flex rounded-lg border border-t-border overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setAgent("devin")}
-            className={`flex-1 py-2 text-sm font-medium transition-colors ${
-              agent === "devin"
-                ? "bg-t-success/15 text-t-success"
-                : "text-t-text-muted hover:text-t-text-secondary"
-            }`}
-          >
-            Devin
-          </button>
-          <button
-            type="button"
-            onClick={() => setAgent("claude")}
-            className={`flex-1 py-2 text-sm font-medium transition-colors ${
-              agent === "claude"
-                ? "bg-purple-500/15 text-purple-600"
-                : "text-t-text-muted hover:text-t-text-secondary"
-            }`}
-          >
-            Claude
-          </button>
-        </div>
+        {claudeEnabled ? (
+          <div className="mb-4 flex rounded-lg border border-t-border overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setAgent("devin")}
+              className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                agent === "devin"
+                  ? "bg-t-success/15 text-t-success"
+                  : "text-t-text-muted hover:text-t-text-secondary"
+              }`}
+            >
+              Devin
+            </button>
+            <button
+              type="button"
+              onClick={() => setAgent("claude")}
+              className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                agent === "claude"
+                  ? "bg-purple-500/15 text-purple-600"
+                  : "text-t-text-muted hover:text-t-text-secondary"
+              }`}
+            >
+              Claude
+            </button>
+          </div>
+        ) : (
+          <p className="mb-4 text-xs text-t-text-muted">Devin Session</p>
+        )}
 
         <form onSubmit={handleSubmit}>
           {agent === "devin" ? (
@@ -133,6 +150,40 @@ export default function CreateSessionModal({
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-t-text-muted">
+                    Model
+                  </label>
+                  <select
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                    className="w-full rounded-md border border-t-border bg-t-bg px-3 py-2 text-sm text-t-text outline-none focus:border-t-primary"
+                  >
+                    {MODELS.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-t-text-muted">
+                    Effort
+                  </label>
+                  <select
+                    value={effort}
+                    onChange={(e) => setEffort(e.target.value)}
+                    className="w-full rounded-md border border-t-border bg-t-bg px-3 py-2 text-sm text-t-text outline-none focus:border-t-primary"
+                  >
+                    {EFFORT_LEVELS.map((e) => (
+                      <option key={e} value={e}>
+                        {e}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div>
                 <label className="mb-1 block text-xs text-t-text-muted">

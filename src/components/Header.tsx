@@ -10,6 +10,9 @@ type HeaderProps = {
   sessionCount: number;
   lastRefresh: Date | null;
   onRefresh: () => void;
+  claudeEnabled?: boolean;
+  linearEnabled?: boolean;
+  vaultEnabled?: boolean;
 };
 
 export default function Header({
@@ -20,6 +23,9 @@ export default function Header({
   sessionCount,
   lastRefresh,
   onRefresh,
+  claudeEnabled = true,
+  linearEnabled = true,
+  vaultEnabled = true,
 }: HeaderProps) {
   return (
     <header className="border-b border-t-border bg-t-bg">
@@ -52,26 +58,30 @@ export default function Header({
             >
               Knowledge
             </button>
-            <button
-              onClick={() => onTabChange("vault")}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                tab === "vault"
-                  ? "bg-t-surface text-t-text-bright"
-                  : "text-t-text-muted hover:text-t-text-secondary"
-              }`}
-            >
-              Vault
-            </button>
-            <button
-              onClick={() => onTabChange("orchestrator")}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                tab === "orchestrator"
-                  ? "bg-t-surface text-t-text-bright"
-                  : "text-t-text-muted hover:text-t-text-secondary"
-              }`}
-            >
-              Orchestrator
-            </button>
+            {vaultEnabled && (
+              <button
+                onClick={() => onTabChange("vault")}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  tab === "vault"
+                    ? "bg-t-surface text-t-text-bright"
+                    : "text-t-text-muted hover:text-t-text-secondary"
+                }`}
+              >
+                Vault
+              </button>
+            )}
+            {claudeEnabled && (
+              <button
+                onClick={() => onTabChange("orchestrator")}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  tab === "orchestrator"
+                    ? "bg-t-surface text-t-text-bright"
+                    : "text-t-text-muted hover:text-t-text-secondary"
+                }`}
+              >
+                Orchestrator
+              </button>
+            )}
             <button
               onClick={() => onTabChange("settings")}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
@@ -92,12 +102,14 @@ export default function Header({
                   {lastRefresh.toLocaleTimeString()}
                 </span>
               )}
-              <button
-                onClick={onToggleLinear}
-                className="rounded-lg border border-t-primary/40 bg-t-primary/10 px-3 py-1.5 text-sm text-t-accent-dim transition-colors hover:bg-t-primary/20"
-              >
-                Linear
-              </button>
+              {linearEnabled && (
+                <button
+                  onClick={onToggleLinear}
+                  className="rounded-lg border border-t-primary/40 bg-t-primary/10 px-3 py-1.5 text-sm text-t-accent-dim transition-colors hover:bg-t-primary/20"
+                >
+                  Linear
+                </button>
+              )}
               <button
                 onClick={onRefresh}
                 className="rounded-lg border border-t-border px-3 py-1.5 text-sm text-t-text-secondary transition-colors hover:bg-t-surface"

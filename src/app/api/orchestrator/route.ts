@@ -20,10 +20,10 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { action, message } = await request.json();
+  const { action, message, reviewTickets, model, effort } = await request.json();
 
   if (action === "start") {
-    const started = startOrchestrator();
+    const started = startOrchestrator({ reviewTickets, model, effort });
     return Response.json({ started });
   }
 
@@ -57,6 +57,7 @@ export async function PUT() {
       }
       lastSentIndex = orch.messages.length;
 
+      let ticksSinceHeartbeat = 0;
       const interval = setInterval(() => {
         const current = getOrchestrator();
         if (!current) {
@@ -72,10 +73,16 @@ export async function PUT() {
             );
           }
           lastSentIndex = current.messages.length;
+          ticksSinceHeartbeat = 0;
         }
 
-        controller.enqueue(encoder.encode(`: heartbeat\n\n`));
-      }, 500);
+        // Send heartbeat every ~15s to keep connection alive
+        ticksSinceHeartbeat++;
+        if (ticksSinceHeartbeat >= 15) {
+          controller.enqueue(encoder.encode(`: heartbeat\n\n`));
+          ticksSinceHeartbeat = 0;
+        }
+      }, 1_000);
     },
   });
 

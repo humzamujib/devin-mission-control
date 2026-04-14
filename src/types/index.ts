@@ -23,6 +23,10 @@ export type DevinSession = {
   tags?: string[];
   pull_request?: {
     url: string;
+    merged?: boolean;
+    closed?: boolean;
+    merged_at?: string | null;
+    merged_by?: string | null;
   } | null;
   structured_output?: {
     title?: string;
@@ -39,6 +43,8 @@ export type BoardCard = {
   column: KanbanColumnId;
   updated_at: string;
   pull_request_url?: string;
+  pull_request_merged?: boolean;
+  pull_request_merged_at?: string | null;
   requesting_user?: string;
 };
 

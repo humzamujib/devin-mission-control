@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import type { ClaudeSession } from "@/types/claude-session";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -22,17 +22,79 @@ type ClaudeSessionPaneProps = {
   accentColor?: string;
   onClose: (id: string) => void;
   onUpdate: (id: string, updates: Partial<ClaudeSession>) => void;
-  onDelete: (id: string) => void;
 };
+
+const ClaudeMessage = memo(function ClaudeMessage({ msg }: { msg: DisplayMessage }) {
+  if (msg.type === "tool") {
+    return (
+      <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-t-surface-hover text-[9px] text-t-text-muted">
+        <span className="font-mono">{msg.toolName}</span>
+        <span className="truncate">{msg.text}</span>
+      </div>
+    );
+  }
+
+  if (msg.type === "result") {
+    return (
+      <div className="rounded-lg border border-t-border bg-t-surface px-3 py-2 text-center">
+        <p className="text-[10px] text-t-text-muted">Session ended</p>
+        <div className="prose-messages text-xs text-t-text mt-1">
+          <ReactMarkdown>{msg.text}</ReactMarkdown>
+        </div>
+      </div>
+    );
+  }
+
+  const fromUser = msg.type === "user";
+  return (
+    <div className={`flex gap-2 ${fromUser ? "flex-row-reverse" : ""}`}>
+      <Avatar className="h-6 w-6 shrink-0 mt-0.5">
+        <AvatarFallback
+          className={`text-[9px] font-medium ${
+            fromUser
+              ? "bg-t-primary/20 text-t-primary"
+              : "bg-purple-500/15 text-purple-600"
+          }`}
+        >
+          {fromUser ? "U" : "C"}
+        </AvatarFallback>
+      </Avatar>
+      <div
+        className={`rounded-lg border px-2.5 py-1.5 max-w-[85%] ${
+          fromUser
+            ? "border-t-msg-user-border bg-t-msg-user-bg"
+            : "border-t-msg-devin-border bg-t-msg-devin-bg"
+        }`}
+      >
+        <div className="mb-0.5 flex items-center gap-1.5">
+          <span
+            className={`text-[9px] font-medium ${
+              fromUser ? "text-t-accent" : "text-purple-600"
+            }`}
+          >
+            {fromUser ? "You" : "Claude"}
+          </span>
+          {msg.timestamp && (
+            <span className="text-[9px] text-t-text-muted/50">
+              {new Date(msg.timestamp).toLocaleTimeString()}
+            </span>
+          )}
+        </div>
+        <div className="prose-messages text-xs text-t-text min-w-0 break-words">
+          <ReactMarkdown>{msg.text}</ReactMarkdown>
+        </div>
+      </div>
+    </div>
+  );
+});
 
 export default function ClaudeSessionPane({
   session,
   accentColor,
   onClose,
   onUpdate,
-  onDelete,
 }: ClaudeSessionPaneProps) {
-  const [messages, setMessages] = useState<DisplayMessage[]>([]);
+  const [sdkMessages, setSdkMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -41,18 +103,33 @@ export default function ClaudeSessionPane({
 
   const isSdkSession = session.id.startsWith("sdk-");
 
+  // For auto-discovered sessions, map messages from props
+  const autoMessages = useMemo(() => {
+    if (isSdkSession || !session.messages) return [];
+
+    return session.messages.map((m) => ({
+      type: m.role === "user" ? "user" : "assistant",
+      text: m.text,
+      timestamp: m.timestamp,
+    })) as DisplayMessage[];
+  }, [isSdkSession, session.messages]);
+
+  // Use appropriate messages based on session type
+  const messages = isSdkSession ? sdkMessages : autoMessages;
+
   // Connect to SSE stream for SDK sessions
   useEffect(() => {
     if (!isSdkSession) return;
 
     const es = new EventSource(`/api/claude/sessions/${session.id}/stream`);
     eventSourceRef.current = es;
-    setConnected(true);
+
+    es.onopen = () => setConnected(true);
 
     es.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data) as DisplayMessage;
-        setMessages((prev) => [...prev, msg]);
+        setSdkMessages((prev) => [...prev, msg]);
 
         if (msg.type === "result") {
           onUpdate(session.id, { status: "done" });
@@ -76,19 +153,6 @@ export default function ClaudeSessionPane({
       eventSourceRef.current = null;
     };
   }, [isSdkSession, session.id, onUpdate]);
-
-  // For auto-discovered sessions, use the messages from props
-  useEffect(() => {
-    if (!isSdkSession && session.messages) {
-      setMessages(
-        session.messages.map((m) => ({
-          type: m.role === "user" ? "user" : "assistant",
-          text: m.text,
-          timestamp: m.timestamp,
-        }))
-      );
-    }
-  }, [isSdkSession, session.messages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView();
@@ -129,7 +193,7 @@ export default function ClaudeSessionPane({
   return (
     <div
       style={accentColor ? { borderTopColor: accentColor } : undefined}
-      className={`flex flex-1 min-w-0 flex-col border-r border-t-border last:border-r-0 overflow-hidden ${accentColor ? "border-t-[3px]" : ""}`}
+      className={`flex flex-1 min-w-0 min-h-0 flex-col border-r border-t-border last:border-r-0 overflow-hidden ${accentColor ? "border-t-[3px]" : ""}`}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 shrink-0">
@@ -181,85 +245,14 @@ export default function ClaudeSessionPane({
       <Separator />
 
       {/* Messages */}
-      <ScrollArea className="flex-1 min-h-0">
+      <ScrollArea className="flex-1 min-h-0 h-0">
         <div className="flex flex-col gap-2 px-3 py-2">
           {messages.length > 0 ? (
             messages
               .filter((m) => m.type !== "system")
-              .map((msg, i) => {
-                if (msg.type === "tool") {
-                  return (
-                    <div
-                      key={i}
-                      className="flex items-center gap-1.5 px-2 py-1 rounded bg-t-surface-hover text-[9px] text-t-text-muted"
-                    >
-                      <span className="font-mono">{msg.toolName}</span>
-                      <span className="truncate">{msg.text}</span>
-                    </div>
-                  );
-                }
-
-                if (msg.type === "result") {
-                  return (
-                    <div
-                      key={i}
-                      className="rounded-lg border border-t-border bg-t-surface px-3 py-2 text-center"
-                    >
-                      <p className="text-[10px] text-t-text-muted">
-                        Session ended
-                      </p>
-                      <div className="prose-messages text-xs text-t-text mt-1">
-                        <ReactMarkdown>{msg.text}</ReactMarkdown>
-                      </div>
-                    </div>
-                  );
-                }
-
-                const fromUser = msg.type === "user";
-                return (
-                  <div
-                    key={i}
-                    className={`flex gap-2 ${fromUser ? "flex-row-reverse" : ""}`}
-                  >
-                    <Avatar className="h-6 w-6 shrink-0 mt-0.5">
-                      <AvatarFallback
-                        className={`text-[9px] font-medium ${
-                          fromUser
-                            ? "bg-t-primary/20 text-t-primary"
-                            : "bg-purple-500/15 text-purple-600"
-                        }`}
-                      >
-                        {fromUser ? "U" : "C"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div
-                      className={`rounded-lg border px-2.5 py-1.5 max-w-[85%] ${
-                        fromUser
-                          ? "border-t-msg-user-border bg-t-msg-user-bg"
-                          : "border-t-msg-devin-border bg-t-msg-devin-bg"
-                      }`}
-                    >
-                      <div className="mb-0.5 flex items-center gap-1.5">
-                        <span
-                          className={`text-[9px] font-medium ${
-                            fromUser ? "text-t-accent" : "text-purple-600"
-                          }`}
-                        >
-                          {fromUser ? "You" : "Claude"}
-                        </span>
-                        {msg.timestamp && (
-                          <span className="text-[9px] text-t-text-muted/50">
-                            {new Date(msg.timestamp).toLocaleTimeString()}
-                          </span>
-                        )}
-                      </div>
-                      <div className="prose-messages text-xs text-t-text min-w-0 break-words">
-                        <ReactMarkdown>{msg.text}</ReactMarkdown>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
+              .map((msg, i) => (
+                <ClaudeMessage key={i} msg={msg} />
+              ))
           ) : (
             <p className="text-xs text-t-text-muted py-4 text-center">
               {isSdkSession ? "Starting session..." : "No messages yet"}

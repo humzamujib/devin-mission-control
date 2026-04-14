@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type { BoardCard, KanbanColumn, KanbanColumnId } from "@/types";
 import SessionCard from "./SessionCard";
 
@@ -50,7 +50,7 @@ export default function KanbanBoard({
   colorMap,
   onSelectCard,
 }: KanbanBoardProps) {
-  const kanbanColumns = groupCards(cards);
+  const kanbanColumns = useMemo(() => groupCards(cards), [cards]);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
     try {

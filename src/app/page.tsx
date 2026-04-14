@@ -6,10 +6,11 @@ import type { ClaudeSession } from "@/types/claude-session";
 import { getStoredTheme, applyTheme, type ThemeId } from "@/lib/themes";
 import {
   listClaudeSessions,
-  createClaudeSession,
   updateClaudeSession,
-  deleteClaudeSession,
 } from "@/lib/claude-sessions";
+import { usePageVisible } from "@/hooks/usePageVisible";
+import type { SessionRecord } from "@/lib/vault";
+import { getStoredModel, setStoredModel, getStoredEffort, setStoredEffort } from "@/lib/model-config";
 import Header from "@/components/Header";
 import KanbanBoard from "@/components/KanbanBoard";
 import CreateSessionModal from "@/components/CreateSessionModal";
@@ -19,10 +20,11 @@ import KnowledgePanel from "@/components/KnowledgePanel";
 import SettingsPanel from "@/components/SettingsPanel";
 import VaultPanel from "@/components/VaultPanel";
 import OrchestratorPanel from "@/components/OrchestratorPanel";
+import VaultSessionDetailPanel from "@/components/VaultSessionDetailPanel";
+import SessionDiagnostics from "@/components/SessionDiagnostics";
 
-const POLL_INTERVAL = 15_000;
+const POLL_INTERVAL = 30_000;
 const USER_EMAIL = process.env.NEXT_PUBLIC_DEVIN_USER_EMAIL || "";
-const REPO_BASE = process.env.NEXT_PUBLIC_REPO_BASE_PATH || "~/Desktop";
 
 const SESSION_COLORS = [
   "#2B6CB0", "#16794A", "#A16207", "#9333EA", "#DC2626", "#0891B2",
@@ -46,6 +48,7 @@ export default function Home() {
   const [devinSessions, setDevinSessions] = useState<DevinSession[]>([]);
   const [claudeSessions, setClaudeSessions] = useState<ClaudeSession[]>([]);
   const [vaultSessions, setVaultSessions] = useState<BoardCard[]>([]);
+  const [vaultRecords, setVaultRecords] = useState<SessionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
@@ -63,7 +66,30 @@ export default function Home() {
       return new Set();
     }
   });
+  const [selectedVaultSessionId, setSelectedVaultSessionId] = useState<string | null>(null);
+  const [defaultModel, setDefaultModel] = useState(() => getStoredModel());
+  const [defaultEffort, setDefaultEffort] = useState(() => getStoredEffort());
+  const [featureFlags, setFeatureFlags] = useState({ claudeEnabled: false, linearEnabled: false, vaultEnabled: false });
   const msgCountsRef = useRef<Record<string, number>>({});
+  const pageVisible = usePageVisible();
+
+  // Fetch feature flags once on mount
+  useEffect(() => {
+    fetch("/api/config")
+      .then((r) => r.json())
+      .then(setFeatureFlags)
+      .catch(() => {});
+  }, []);
+
+  function handleModelChange(model: string) {
+    setDefaultModel(model);
+    setStoredModel(model);
+  }
+
+  function handleEffortChange(effort: string) {
+    setDefaultEffort(effort);
+    setStoredEffort(effort);
+  }
 
   // Clear old manual sessions — auto-discovery handles everything now
   useEffect(() => {
@@ -72,9 +98,9 @@ export default function Home() {
     }
   }, []);
 
-  const fetchClaudeSessions = useCallback(async () => {
+  const fetchClaudeSessions = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch("/api/local/claude-sessions");
+      const res = await fetch("/api/local/claude-sessions", { signal });
       if (!res.ok) return;
       const data = await res.json();
       const discovered: ClaudeSession[] = (data.sessions || []).map(
@@ -99,7 +125,7 @@ export default function Home() {
       // Fetch SDK session statuses
       let sdkSessions: ClaudeSession[] = [];
       try {
-        const sdkRes = await fetch("/api/claude/sessions");
+        const sdkRes = await fetch("/api/claude/sessions", { signal });
         const sdkData = await sdkRes.json();
         sdkSessions = (sdkData.sessions || []).map(
           (s: { id: string; repo: string; title: string; status: string; createdAt: string }) => ({
@@ -122,16 +148,21 @@ export default function Home() {
       sdkRepos.add("devin-mission-control");
       const filtered = discovered.filter((d) => !sdkRepos.has(d.repo));
       setClaudeSessions([...filtered, ...sdkSessions]);
-    } catch {
-      // Local API unavailable
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
     }
   }, []);
 
   useEffect(() => {
-    fetchClaudeSessions();
-    const interval = setInterval(fetchClaudeSessions, POLL_INTERVAL);
-    return () => clearInterval(interval);
-  }, [fetchClaudeSessions]);
+    if (!pageVisible) return;
+    const ac = new AbortController();
+    fetchClaudeSessions(ac.signal);
+    const interval = setInterval(() => fetchClaudeSessions(ac.signal), POLL_INTERVAL);
+    return () => {
+      ac.abort();
+      clearInterval(interval);
+    };
+  }, [fetchClaudeSessions, pageVisible]);
 
   useEffect(() => {
     const stored = getStoredTheme();
@@ -150,17 +181,19 @@ export default function Home() {
 
   // === Vault completed sessions ===
   useEffect(() => {
+    if (!pageVisible) return;
+    const ac = new AbortController();
     const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
     const fetchVaultSessions = async () => {
       try {
-        const res = await fetch("/api/vault/sessions");
+        const res = await fetch("/api/vault/sessions", { signal: ac.signal });
         const data = await res.json();
+        const allSessions: SessionRecord[] = data.sessions || [];
+        setVaultRecords(allSessions);
         const cutoff = Date.now() - SEVEN_DAYS;
-        const cards: BoardCard[] = (data.sessions || [])
-          .filter((s: { completed_at: string }) =>
-            new Date(s.completed_at).getTime() > cutoff
-          )
-          .map((s: { id: string; title: string; repo: string; completed_at: string; result: string }) => ({
+        const cards: BoardCard[] = allSessions
+          .filter((s) => new Date(s.completed_at).getTime() > cutoff)
+          .map((s) => ({
             id: `vault-${s.id}`,
             source: "claude" as const,
             title: s.title,
@@ -171,19 +204,25 @@ export default function Home() {
             requesting_user: s.repo,
           }));
         setVaultSessions(cards);
-      } catch {}
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+      }
     };
     fetchVaultSessions();
     const interval = setInterval(fetchVaultSessions, 60_000);
-    return () => clearInterval(interval);
-  }, []);
+    return () => {
+      ac.abort();
+      clearInterval(interval);
+    };
+  }, [pageVisible]);
 
   // === Devin session management ===
 
-  const fetchDevinSessions = useCallback(async () => {
+  const fetchDevinSessions = useCallback(async (signal?: AbortSignal) => {
     try {
       const res = await fetch(
-        `/api/devin/sessions?user_email=${encodeURIComponent(USER_EMAIL)}`
+        `/api/devin/sessions?user_email=${encodeURIComponent(USER_EMAIL)}`,
+        { signal }
       );
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -201,23 +240,54 @@ export default function Home() {
       setDismissedIds((prev) => {
         if (prev.size === 0) return prev;
         const next = new Set(prev);
+        const currentSessionIds = new Set(normalized.map((s: DevinSession) => s.session_id));
+
+        // Clean up dismissed sessions that no longer exist
+        for (const dismissedId of next) {
+          if (!currentSessionIds.has(dismissedId)) {
+            next.delete(dismissedId);
+          }
+        }
+
         for (const s of normalized) {
           if (!next.has(s.session_id)) continue;
+
+          // Always clear finished/stopped sessions from dismissed list after some time
+          // This prevents permanent "idle" state for actually finished sessions
           if (s.status_enum === "finished" || s.status_enum === "stopped") {
-            if (!s.pull_request) next.delete(s.session_id);
+            const sessionAge = Date.now() - new Date(s.updated_at).getTime();
+            const oneHour = 60 * 60 * 1000;
+
+            // Clear from dismissed list after 1 hour if with PR, immediately if no PR
+            if (!s.pull_request || sessionAge > oneHour) {
+              next.delete(s.session_id);
+            }
             continue;
           }
+
+          // Clear blocked sessions if they've been updated (new messages)
           if (s.status_enum === "blocked") {
             const prevTime = msgCountsRef.current[s.session_id];
             if (prevTime && s.updated_at !== prevTime) next.delete(s.session_id);
           }
+
+          // Clear if session status changed from what it was when dismissed
+          // This handles cases where terminated sessions come back to life
+          if (s.status_enum === "running" || s.status_enum === "working") {
+            const prevTime = msgCountsRef.current[s.session_id];
+            if (prevTime && s.updated_at !== prevTime) next.delete(s.session_id);
+          }
         }
+
+        // Update message counts for comparison
         for (const s of normalized) {
           msgCountsRef.current[s.session_id] = s.updated_at;
         }
+
         return next.size === prev.size ? prev : next;
       });
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setError(
         err instanceof Error ? err.message : "Failed to fetch sessions"
       );
@@ -227,14 +297,27 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    fetchDevinSessions();
-    const interval = setInterval(fetchDevinSessions, POLL_INTERVAL);
-    return () => clearInterval(interval);
-  }, [fetchDevinSessions]);
+    if (!pageVisible) return;
+    const ac = new AbortController();
+
+    fetchDevinSessions(ac.signal);
+    const sessionInterval = setInterval(() => fetchDevinSessions(ac.signal), POLL_INTERVAL);
+
+    return () => {
+      ac.abort();
+      clearInterval(sessionInterval);
+    };
+  }, [fetchDevinSessions, pageVisible]);
 
   // === Unified open/close ===
 
   function handleToggleCard(id: string) {
+    // Handle vault sessions separately
+    if (id.startsWith("vault-")) {
+      setSelectedVaultSessionId(selectedVaultSessionId === id ? null : id);
+      return;
+    }
+
     setOpenIds((ids) => {
       if (ids.includes(id)) {
         const next = ids.filter((i) => i !== id);
@@ -286,6 +369,8 @@ export default function Home() {
     title: string;
     repo: string;
     notes: string;
+    model: string;
+    effort: string;
   }) {
     const prompt = data.notes
       ? `${data.title}\n\n${data.notes}`
@@ -295,7 +380,7 @@ export default function Home() {
     const res = await fetch("/api/claude/sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, repo: data.repo, title: data.title }),
+      body: JSON.stringify({ prompt, repo: data.repo, title: data.title, model: data.model, effort: data.effort }),
     });
     const { id } = await res.json();
 
@@ -327,20 +412,30 @@ export default function Home() {
     setClaudeSessions(listClaudeSessions());
   }
 
-  function handleDeleteClaude(id: string) {
-    deleteClaudeSession(id);
-    setClaudeSessions(listClaudeSessions());
-    handleClosePane(id);
-  }
 
   // === Build unified board cards ===
 
   const boardCards: BoardCard[] = useMemo(() => {
     const devinCards: BoardCard[] = devinSessions.map((s) => {
       let column: KanbanColumnId;
-      if (dismissedIds.has(s.session_id)) {
+      let status_display: string = s.status_enum;
+
+      // Priority 1: PR status (enriched by the API route via GitHub)
+      if (s.pull_request?.url && (s.pull_request.merged || s.pull_request.closed)) {
+        column = "finished";
+        status_display = "finished";
+      } else if (s.pull_request?.url) {
+        // Has open PR → needs attention
         column = "idle";
-      } else {
+        status_display = "idle";
+      }
+      // Priority 2: Dismissed sessions go to idle
+      else if (dismissedIds.has(s.session_id)) {
+        column = "idle";
+        status_display = "idle";
+      }
+      // Priority 3: Session status
+      else {
         switch (s.status_enum) {
           case "working":
           case "running":
@@ -353,19 +448,23 @@ export default function Home() {
           case "finished":
           case "stopped":
             column = "finished";
+            status_display = s.status_enum;
             break;
           default:
             column = "queued";
         }
       }
+
       return {
         id: s.session_id,
         source: "devin",
         title: s.title || `Session ${s.session_id.slice(0, 8)}`,
-        status_display: dismissedIds.has(s.session_id) ? "idle" : s.status_enum,
+        status_display,
         column,
         updated_at: s.updated_at,
         pull_request_url: s.pull_request?.url,
+        pull_request_merged: s.pull_request?.merged,
+        pull_request_merged_at: s.pull_request?.merged_at,
         requesting_user: s.requesting_user_email?.split("@")[0],
       };
     });
@@ -394,8 +493,6 @@ export default function Home() {
 
     return [...devinCards, ...claudeCards, ...filteredVault];
   }, [devinSessions, claudeSessions, dismissedIds, vaultSessions]);
-
-  const hasOpenPanes = openIds.length > 0;
   const colorMap: Record<string, string> = {};
   openIds.forEach((id, i) => {
     colorMap[id] = SESSION_COLORS[i % SESSION_COLORS.length];
@@ -415,6 +512,9 @@ export default function Home() {
         sessionCount={activeCount}
         lastRefresh={lastRefresh}
         onRefresh={fetchDevinSessions}
+        claudeEnabled={featureFlags.claudeEnabled}
+        linearEnabled={featureFlags.linearEnabled}
+        vaultEnabled={featureFlags.vaultEnabled}
       />
 
       {tab === "sessions" && (
@@ -455,7 +555,6 @@ export default function Home() {
             onWrapUpDevin={handleWrapUpDevin}
             onCloseClaude={handleClosePane}
             onUpdateClaude={handleUpdateClaude}
-            onDeleteClaude={handleDeleteClaude}
           />
           <CreateSessionModal
             open={showCreate}
@@ -467,33 +566,70 @@ export default function Home() {
             onSubmitClaude={handleCreateClaude}
             initialPrompt={createPrompt}
             repos={KNOWN_REPOS}
+            defaultModel={defaultModel}
+            defaultEffort={defaultEffort}
+            claudeEnabled={featureFlags.claudeEnabled}
           />
-          <LinearPanel
-            open={showLinear}
-            onClose={() => setShowLinear(false)}
-            onCreateSession={handleLinearToDevin}
-            activeSessionTitles={devinSessions
-              .filter(
-                (s) =>
-                  (s.status_enum !== "finished" &&
-                    s.status_enum !== "stopped") ||
-                  s.pull_request
-              )
-              .map((s) => s.title || "")}
-          />
+          {featureFlags.linearEnabled && (
+            <LinearPanel
+              open={showLinear}
+              onClose={() => setShowLinear(false)}
+              onCreateSession={handleLinearToDevin}
+              activeSessionTitles={devinSessions
+                .filter(
+                  (s) =>
+                    (s.status_enum !== "finished" &&
+                      s.status_enum !== "stopped") ||
+                    s.pull_request
+                )
+                .map((s) => s.title || "")}
+            />
+          )}
         </>
       )}
 
       {tab === "knowledge" && <KnowledgePanel />}
 
-      {tab === "vault" && <VaultPanel />}
+      {tab === "vault" && featureFlags.vaultEnabled && <VaultPanel />}
 
-      {tab === "orchestrator" && <OrchestratorPanel />}
+      {tab === "orchestrator" && featureFlags.claudeEnabled && (
+        <OrchestratorPanel
+          defaultModel={defaultModel}
+          defaultEffort={defaultEffort}
+        />
+      )}
 
       {tab === "settings" && (
         <SettingsPanel
           currentTheme={theme}
           onThemeChange={handleThemeChange}
+          defaultModel={defaultModel}
+          onModelChange={handleModelChange}
+          defaultEffort={defaultEffort}
+          onEffortChange={handleEffortChange}
+          claudeEnabled={featureFlags.claudeEnabled}
+        />
+      )}
+
+      {/* Vault Session Detail Panel */}
+      <VaultSessionDetailPanel
+        sessionId={selectedVaultSessionId}
+        session={
+          selectedVaultSessionId
+            ? vaultRecords.find((r) => `vault-${r.id}` === selectedVaultSessionId) ?? null
+            : null
+        }
+        onClose={() => setSelectedVaultSessionId(null)}
+      />
+
+      {/* Session Diagnostics - only on sessions tab */}
+      {tab === "sessions" && (
+        <SessionDiagnostics
+          sessions={devinSessions}
+          dismissedIds={dismissedIds}
+          onRefresh={fetchDevinSessions}
+          onTerminate={handleTerminateDevin}
+          onWrapUp={handleWrapUpDevin}
         />
       )}
     </div>
@@ -507,9 +643,11 @@ function normalizeSession(raw: Record<string, unknown>): DevinSession {
   const apiStatusEnum = (raw.status_enum as string) || "";
   let statusEnum: DevinSession["status_enum"] = "unknown";
   const se = apiStatusEnum.toLowerCase() || statusLower;
-  if (se === "working" || se.includes("run") || se === "in_progress")
+  if (se === "working" || se === "in_progress")
     statusEnum = "working";
-  else if (se.includes("pause") || se.includes("wait"))
+  else if (se.includes("run"))
+    statusEnum = "running";
+  else if (se.includes("pause") || se.includes("wait") || se.includes("suspend") || se.includes("sleep"))
     statusEnum = "paused";
   else if (se.includes("block")) statusEnum = "blocked";
   else if (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import type { DevinSession } from "@/types";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -14,6 +14,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { usePageVisible } from "@/hooks/usePageVisible";
 
 type SessionMessage = {
   type: string;
@@ -56,6 +57,52 @@ function isUserMessage(msg: SessionMessage): boolean {
   );
 }
 
+const DevinMessage = memo(function DevinMessage({ msg }: { msg: SessionMessage }) {
+  const fromUser = isUserMessage(msg);
+  return (
+    <div className={`flex gap-2 ${fromUser ? "flex-row-reverse" : ""}`}>
+      <Avatar className="h-6 w-6 shrink-0 mt-0.5">
+        <AvatarFallback
+          className={`text-[9px] font-medium ${
+            fromUser
+              ? "bg-t-primary/20 text-t-primary"
+              : "bg-t-surface-hover text-t-text-muted"
+          }`}
+        >
+          {fromUser ? "U" : "D"}
+        </AvatarFallback>
+      </Avatar>
+      <div
+        className={`rounded-lg border px-2.5 py-1.5 max-w-[85%] ${
+          fromUser
+            ? "border-t-msg-user-border bg-t-msg-user-bg"
+            : "border-t-msg-devin-border bg-t-msg-devin-bg"
+        }`}
+      >
+        <div className="mb-0.5 flex items-center gap-1.5">
+          <span
+            className={`text-[9px] font-medium ${
+              fromUser ? "text-t-accent" : "text-t-text-muted"
+            }`}
+          >
+            {fromUser ? msg.username || "You" : "Devin"}
+          </span>
+          {msg.timestamp && (
+            <span className="text-[9px] text-t-text-muted/50">
+              {new Date(msg.timestamp).toLocaleTimeString()}
+            </span>
+          )}
+        </div>
+        <div className="prose-messages text-xs text-t-text min-w-0 break-words">
+          <ReactMarkdown>
+            {slackToMarkdown(msg.message)}
+          </ReactMarkdown>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   working: "default",
   running: "default",
@@ -83,9 +130,12 @@ export default function SessionPane({
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [messages, setMessages] = useState<SessionMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const pageVisible = usePageVisible();
 
-  const fetchDetail = useCallback(() => {
-    fetch(`/api/devin/sessions/${session.session_id}`)
+  // Fetch session detail for messages (the only data not in the parent's list poll).
+  // Uses the parent's 15s cadence to stay aligned.
+  const fetchDetail = useCallback((signal?: AbortSignal) => {
+    fetch(`/api/devin/sessions/${session.session_id}`, { signal })
       .then((r) => r.json())
       .then((data) => {
         setDetail(data);
@@ -96,14 +146,22 @@ export default function SessionPane({
           });
         }
       })
-      .catch(() => setDetail(null));
+      .catch((err) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setDetail(null);
+      });
   }, [session.session_id]);
 
   useEffect(() => {
-    fetchDetail();
-    const interval = setInterval(fetchDetail, 30_000);
-    return () => clearInterval(interval);
-  }, [fetchDetail]);
+    if (!pageVisible) return;
+    const ac = new AbortController();
+    fetchDetail(ac.signal);
+    const interval = setInterval(() => fetchDetail(ac.signal), 15_000);
+    return () => {
+      ac.abort();
+      clearInterval(interval);
+    };
+  }, [fetchDetail, pageVisible]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView();
@@ -148,7 +206,7 @@ export default function SessionPane({
   return (
     <div
       style={accentColor ? { borderTopColor: accentColor } : undefined}
-      className={`flex flex-1 min-w-0 flex-col border-r border-t-border last:border-r-0 overflow-hidden ${accentColor ? "border-t-[3px]" : ""}`}
+      className={`flex flex-1 min-w-0 min-h-0 flex-col border-r border-t-border last:border-r-0 overflow-hidden ${accentColor ? "border-t-[3px]" : ""}`}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 shrink-0">
@@ -267,57 +325,12 @@ export default function SessionPane({
       <Separator />
 
       {/* Messages */}
-      <ScrollArea className="flex-1 min-h-0">
+      <ScrollArea className="flex-1 min-h-0 h-0">
         <div className="flex flex-col gap-2 px-3 py-2">
           {messages.length > 0 ? (
-            messages.map((msg, i) => {
-              const fromUser = isUserMessage(msg);
-              return (
-                <div
-                  key={i}
-                  className={`flex gap-2 ${fromUser ? "flex-row-reverse" : ""}`}
-                >
-                  <Avatar className="h-6 w-6 shrink-0 mt-0.5">
-                    <AvatarFallback
-                      className={`text-[9px] font-medium ${
-                        fromUser
-                          ? "bg-t-primary/20 text-t-primary"
-                          : "bg-t-surface-hover text-t-text-muted"
-                      }`}
-                    >
-                      {fromUser ? "U" : "D"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div
-                    className={`rounded-lg border px-2.5 py-1.5 max-w-[85%] ${
-                      fromUser
-                        ? "border-t-msg-user-border bg-t-msg-user-bg"
-                        : "border-t-msg-devin-border bg-t-msg-devin-bg"
-                    }`}
-                  >
-                    <div className="mb-0.5 flex items-center gap-1.5">
-                      <span
-                        className={`text-[9px] font-medium ${
-                          fromUser ? "text-t-accent" : "text-t-text-muted"
-                        }`}
-                      >
-                        {fromUser ? msg.username || "You" : "Devin"}
-                      </span>
-                      {msg.timestamp && (
-                        <span className="text-[9px] text-t-text-muted/50">
-                          {new Date(msg.timestamp).toLocaleTimeString()}
-                        </span>
-                      )}
-                    </div>
-                    <div className="prose-messages text-xs text-t-text min-w-0 break-words">
-                      <ReactMarkdown>
-                        {slackToMarkdown(msg.message)}
-                      </ReactMarkdown>
-                    </div>
-                  </div>
-                </div>
-              );
-            })
+            messages.map((msg, i) => (
+              <DevinMessage key={i} msg={msg} />
+            ))
           ) : detail ? (
             <p className="text-xs text-t-text-muted py-4 text-center">
               No messages yet

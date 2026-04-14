@@ -90,25 +90,28 @@ export async function readFile(filePath: string): Promise<string | null> {
 
 export async function listPatterns(): Promise<PatternMeta[]> {
   const files = await listDirectory("patterns");
-  const patterns: PatternMeta[] = [];
 
-  for (const file of files) {
-    const content = await readFile(file.path);
-    if (!content) continue;
-    const { meta, body } = parseFrontmatter(content);
-    patterns.push({
-      name: file.name.replace(/\.md$/, ""),
-      path: file.path,
-      tags: (meta.tags as string[]) || [],
-      repos: (meta.repos as string[]) || [],
-      confidence: (meta.confidence as string) || "unknown",
-      last_referenced: (meta.last_referenced as string) || "",
-      reference_count: (meta.reference_count as number) || 0,
-      body,
-    });
-  }
+  const results = await Promise.all(
+    files.map(async (file) => {
+      const content = await readFile(file.path);
+      if (!content) return null;
+      const { meta, body } = parseFrontmatter(content);
+      return {
+        name: file.name.replace(/\.md$/, ""),
+        path: file.path,
+        tags: (meta.tags as string[]) || [],
+        repos: (meta.repos as string[]) || [],
+        confidence: (meta.confidence as string) || "unknown",
+        last_referenced: (meta.last_referenced as string) || "",
+        reference_count: (meta.reference_count as number) || 0,
+        body,
+      };
+    })
+  );
 
-  return patterns.sort((a, b) => a.name.localeCompare(b.name));
+  return results
+    .filter((p): p is PatternMeta => p !== null)
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function listChangelogs(
@@ -213,21 +216,24 @@ export async function writeChangelog(
 
 export async function listSessionRecords(): Promise<SessionRecord[]> {
   const files = await listDirectory("sessions");
-  const records: SessionRecord[] = [];
+  const jsonFiles = files.filter((f) => f.name.endsWith(".json")).slice(0, 30);
 
-  for (const file of files.slice(0, 30)) {
-    if (!file.name.endsWith(".json")) continue;
-    const content = await readFile(file.path);
-    if (!content) continue;
-    try {
-      records.push(JSON.parse(content));
-    } catch {
-      continue;
-    }
-  }
-
-  return records.sort(
-    (a, b) =>
-      new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime()
+  const results = await Promise.all(
+    jsonFiles.map(async (file) => {
+      const content = await readFile(file.path);
+      if (!content) return null;
+      try {
+        return JSON.parse(content) as SessionRecord;
+      } catch {
+        return null;
+      }
+    })
   );
+
+  return results
+    .filter((r): r is SessionRecord => r !== null)
+    .sort(
+      (a, b) =>
+        new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime()
+    );
 }

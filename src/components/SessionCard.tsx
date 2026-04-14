@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import type { BoardCard } from "@/types";
 
 type SessionCardProps = {
@@ -20,7 +21,7 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-export default function SessionCard({
+export default memo(function SessionCard({
   card,
   isOpen,
   accentColor,
@@ -69,20 +70,32 @@ export default function SessionCard({
         </p>
       )}
       {card.pull_request_url && (
-        <a
-          href={card.pull_request_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className={`inline-flex items-center gap-1 mt-1 rounded px-2 py-0.5 text-xs ${
-            card.column === "idle"
-              ? "bg-t-success/15 text-t-success font-medium"
-              : "bg-t-border text-t-accent"
-          }`}
-        >
-          {card.column === "idle" ? "PR ready" : "PR"} #
-          {card.pull_request_url.split("/").pop()}
-        </a>
+        <div className="flex flex-col gap-0.5 mt-1">
+          <a
+            href={card.pull_request_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs w-fit ${
+              card.pull_request_merged
+                ? "bg-t-success/15 text-t-success font-medium"
+                : card.column === "idle"
+                ? "bg-t-success/15 text-t-success font-medium"
+                : "bg-t-border text-t-accent"
+            }`}
+          >
+            {card.pull_request_merged
+              ? "✓ PR merged"
+              : card.column === "idle"
+              ? "PR ready"
+              : "PR"} #{card.pull_request_url.split("/").pop()}
+          </a>
+          {card.pull_request_merged && card.pull_request_merged_at && (
+            <span className="text-[10px] text-t-text-muted">
+              Merged {timeAgo(card.pull_request_merged_at)}
+            </span>
+          )}
+        </div>
       )}
       {card.requesting_user && (
         <p className="mt-1 text-[10px] text-t-text-muted truncate">
@@ -91,4 +104,4 @@ export default function SessionCard({
       )}
     </button>
   );
-}
+});
