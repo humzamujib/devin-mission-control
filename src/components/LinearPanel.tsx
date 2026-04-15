@@ -47,19 +47,32 @@ export default function LinearPanel({
 
   useEffect(() => {
     if (!open) return;
-    setLoading(true);
-    fetch("/api/linear/issues")
-      .then((r) => r.json())
-      .then((data) => {
+
+    // Reset state and fetch
+    setError(null);
+    setTickets([]);
+    setExportedAt(null);
+
+    const fetchTickets = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch("/api/linear/issues");
+        const data = await response.json();
+
         if (data.error) {
           setError(data.error);
         } else {
           setTickets(data.tickets || []);
           setExportedAt(data.exportedAt || null);
         }
-      })
-      .catch(() => setError("Failed to fetch tickets"))
-      .finally(() => setLoading(false));
+      } catch {
+        setError("Failed to fetch tickets");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTickets();
   }, [open]);
 
   // Poll sync session status

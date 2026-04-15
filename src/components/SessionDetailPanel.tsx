@@ -58,8 +58,10 @@ export default function SessionDetailPanel({
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [terminating, setTerminating] = useState(false);
-  const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
+  const [sleeping, setSleeping] = useState(false);
+  const [detail, setDetail] = useState<{ messages?: SessionMessage[] } | null>(null);
   const [messages, setMessages] = useState<SessionMessage[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -113,6 +115,7 @@ export default function SessionDetailPanel({
         <button
           onClick={onClose}
           className="text-t-text-muted transition-colors hover:text-t-text-secondary"
+          aria-label="Close session details"
         >
           &times;
         </button>
@@ -237,20 +240,74 @@ export default function SessionDetailPanel({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Terminate */}
+      {/* Error Display */}
+      {error && (
+        <div className="border-t border-t-border px-5 py-3">
+          <div className="rounded-lg border border-t-error/30 bg-t-error/10 px-3 py-2">
+            <p className="text-xs text-t-error">{error}</p>
+            <button
+              onClick={() => setError(null)}
+              className="mt-1 text-xs text-t-error/70 hover:text-t-error"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Actions */}
       {session.status_enum !== "finished" &&
         session.status_enum !== "stopped" && (
-          <div className="border-t border-t-border px-5 py-2">
+          <div className="border-t border-t-border px-5 py-2 space-y-2">
+            {/* Sleep Button - for stuck sessions */}
             <button
               onClick={async () => {
-                if (!confirm("Terminate this session?")) return;
+                if (!confirm("Put this session to sleep? This can help with stuck sessions.")) return;
+                setSleeping(true);
+                setError(null);
+                try {
+                  const response = await fetch(`/api/devin/sessions/${session.session_id}/sleep`, {
+                    method: "POST",
+                  });
+                  if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || errorData.message || `Sleep failed (${response.status})`);
+                  }
+                  onTerminate?.(session.session_id);
+                  onClose();
+                } catch (err) {
+                  setError(`Failed to sleep session: ${err instanceof Error ? err.message : 'Unknown error'}`);
+                } finally {
+                  setSleeping(false);
+                }
+              }}
+              disabled={sleeping}
+              className="w-full rounded-lg border border-t-warning/30 bg-t-warning/10 py-1.5 text-xs text-t-warning transition-colors hover:bg-t-warning/20 disabled:opacity-50"
+            >
+              {sleeping ? "Sleeping..." : "Sleep Session"}
+            </button>
+
+            {/* Terminate Button */}
+            <button
+              onClick={async () => {
+                if (!confirm("Terminate this session? This will permanently stop it.")) return;
                 setTerminating(true);
-                await fetch(`/api/devin/sessions/${session.session_id}`, {
-                  method: "DELETE",
-                });
-                setTerminating(false);
-                onTerminate?.(session.session_id);
-                onClose();
+                setError(null);
+                try {
+                  const response = await fetch(`/api/devin/sessions/${session.session_id}`, {
+                    method: "DELETE",
+                  });
+                  if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || errorData.message || `Termination failed (${response.status})`);
+                  }
+                  onTerminate?.(session.session_id);
+                  onClose();
+                } catch (err) {
+                  setError(`Failed to terminate session: ${err instanceof Error ? err.message : 'Unknown error'}`);
+                } finally {
+                  setTerminating(false);
+                }
               }}
               disabled={terminating}
               className="w-full rounded-lg border border-t-error/30 bg-t-error/10 py-1.5 text-xs text-t-error transition-colors hover:bg-t-error/20 disabled:opacity-50"

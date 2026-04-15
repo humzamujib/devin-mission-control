@@ -53,3 +53,36 @@ export async function terminateSession(sessionId: string): Promise<Response> {
     headers: getHeaders(),
   });
 }
+
+export async function sleepSession(sessionId: string): Promise<Response> {
+  return fetch(`${DEVIN_API_BASE}/sessions/${sessionId}/sleep`, {
+    method: "POST",
+    headers: getHeaders(),
+  });
+}
+
+/**
+ * Update session status based on PR state
+ * Uses appropriate Devin API endpoints to transition sessions
+ */
+export async function updateSessionStatus(
+  sessionId: string,
+  targetStatus: "finished" | "idle" | "blocked"
+): Promise<Response> {
+  switch (targetStatus) {
+    case "finished":
+      // Sleep the session to mark it as finished
+      return sleepSession(sessionId);
+
+    case "idle":
+      // Also sleep for idle - the system will show it as idle if it has open PR
+      return sleepSession(sessionId);
+
+    case "blocked":
+      // For blocked status, we can send a message indicating external dependency
+      return sendMessage(sessionId, "⏳ Session blocked - waiting for external dependencies");
+
+    default:
+      throw new Error(`Unsupported target status: ${targetStatus}`);
+  }
+}

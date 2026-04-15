@@ -1,0 +1,16 @@
+node_modules
+.next
+.env.local
+.git
+*.md
+.gitignore
+Dockerfile
+docker-compose.local.yml
+README.md
+docs
+scripts
+.claude
+SESSION_STATUS_FIX_SUMMARY.md
+STATE_SYNC_FIXES.md
+server.log
+tsconfig.tsbuildinfo

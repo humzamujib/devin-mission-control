@@ -19,7 +19,6 @@ type SessionSplitViewProps = {
   onWrapUpDevin: (id: string) => void;
   onCloseClaude: (id: string) => void;
   onUpdateClaude: (id: string, updates: Partial<ClaudeSession>) => void;
-  onDeleteClaude: (id: string) => void;
 };
 
 function LayoutIcon({
@@ -68,7 +67,6 @@ export default function SessionSplitView({
   onWrapUpDevin,
   onCloseClaude,
   onUpdateClaude,
-  onDeleteClaude,
 }: SessionSplitViewProps) {
   if (openIds.length === 0) return null;
 
@@ -132,7 +130,6 @@ export default function SessionSplitView({
                 accentColor={colorMap[pane.claude.id]}
                 onClose={onCloseClaude}
                 onUpdate={onUpdateClaude}
-                onDelete={onDeleteClaude}
               />
             );
           })}
