@@ -40,3 +40,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# logs
+server.log
+
+# temp notes
+SESSION_STATUS_FIX_SUMMARY.md
+STATE_SYNC_FIXES.md
+step-3a-changelog.md
+changelog.md
+
+# tool versions
+.tool-versions
