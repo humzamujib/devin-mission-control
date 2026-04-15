@@ -462,14 +462,23 @@ export default function Home() {
       let column: KanbanColumnId;
       let status_display: string = s.status_enum;
 
+      // Get all PRs (normalize from both singular and array)
+      const allPRs = s.pull_requests || (s.pull_request?.url ? [s.pull_request] : []);
+
       // Priority 1: PR status (enriched by the API route via GitHub)
-      if (s.pull_request?.url && (s.pull_request.merged || s.pull_request.closed)) {
-        column = "finished";
-        status_display = "finished";
-      } else if (s.pull_request?.url) {
-        // Has open PR → needs attention
-        column = "idle";
-        status_display = "idle";
+      if (allPRs.length > 0) {
+        const hasOpenPRs = allPRs.some(pr => pr.url && !pr.merged && !pr.closed);
+        const allPRsClosed = allPRs.every(pr => pr.merged || pr.closed);
+
+        if (allPRsClosed && allPRs.length > 0) {
+          // All PRs are merged/closed → finished
+          column = "finished";
+          status_display = "finished";
+        } else if (hasOpenPRs) {
+          // Has open PRs → needs attention
+          column = "idle";
+          status_display = "idle";
+        }
       }
       // Priority 2: Dismissed sessions go to idle
       else if (dismissedIds.has(s.session_id)) {
@@ -504,9 +513,12 @@ export default function Home() {
         status_display,
         column,
         updated_at: s.updated_at,
+        // Keep the old singular fields for backward compatibility
         pull_request_url: s.pull_request?.url,
         pull_request_merged: s.pull_request?.merged,
         pull_request_merged_at: s.pull_request?.merged_at,
+        // Add the new array field
+        pull_requests: allPRs.length > 0 ? allPRs : undefined,
         requesting_user: s.requesting_user_email?.split("@")[0],
       };
     });

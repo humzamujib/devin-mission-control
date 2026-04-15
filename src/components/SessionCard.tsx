@@ -69,7 +69,40 @@ export default memo(function SessionCard({
           {card.subtitle}
         </p>
       )}
-      {card.pull_request_url && (
+      {(card.pull_requests && card.pull_requests.length > 0) ? (
+        <div className="flex flex-col gap-0.5 mt-1">
+          {card.pull_requests.map((pr, index) => (
+            <div key={`${pr.url}-${index}`} className="flex flex-col gap-0.5">
+              <a
+                href={pr.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs w-fit ${
+                  pr.merged
+                    ? "bg-t-success/15 text-t-success font-medium"
+                    : card.column === "idle"
+                    ? "bg-t-success/15 text-t-success font-medium"
+                    : "bg-t-border text-t-accent"
+                }`}
+              >
+                {pr.merged
+                  ? "✓ PR merged"
+                  : pr.closed
+                  ? "✗ PR closed"
+                  : card.column === "idle"
+                  ? "PR ready"
+                  : "PR"} #{pr.url.split("/").pop()}
+              </a>
+              {pr.merged && pr.merged_at && (
+                <span className="text-[10px] text-t-text-muted">
+                  Merged {timeAgo(pr.merged_at)}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : card.pull_request_url && (
         <div className="flex flex-col gap-0.5 mt-1">
           <a
             href={card.pull_request_url}

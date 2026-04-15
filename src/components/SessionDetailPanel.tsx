@@ -156,18 +156,25 @@ export default function SessionDetailPanel({
             </span>
           </div>
         )}
-        {session.pull_request && (
-          <div className="mt-2">
+        {((session.pull_requests && session.pull_requests.length > 0) ? session.pull_requests : (session.pull_request ? [session.pull_request] : [])).map((pr, index) => (
+          <div key={`${pr.url}-${index}`} className="mt-2">
             <a
-              href={session.pull_request.url}
+              href={pr.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-t-accent hover:text-t-text-bright"
+              className={`text-xs ${
+                pr.merged
+                  ? "text-t-success"
+                  : pr.closed
+                  ? "text-t-text-muted"
+                  : "text-t-accent"
+              } hover:text-t-text-bright`}
             >
-              PR #{session.pull_request.url.split("/").pop()}
+              PR #{pr.url.split("/").pop()}
+              {pr.merged ? " (merged)" : pr.closed ? " (closed)" : " (open)"}
             </a>
           </div>
-        )}
+        ))}
       </div>
 
       {/* Blocked — prompt to open in Devin for approval */}

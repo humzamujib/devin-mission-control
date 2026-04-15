@@ -14,22 +14,59 @@ export async function GET(request: NextRequest) {
   const data = await res.json();
   const sessions: Record<string, unknown>[] = Array.isArray(data) ? data : data.sessions ?? [];
 
+  // Normalize sessions: convert singular PR to array and collect all PR URLs
+  for (const s of sessions) {
+    const singlePR = s.pull_request as { url?: string; merged?: boolean; closed?: boolean; merged_at?: string | null; merged_by?: string | null } | null;
+    const arrayPRs = s.pull_requests as Array<{ url: string; merged?: boolean; closed?: boolean; merged_at?: string | null; merged_by?: string | null }> | undefined;
+
+    // Normalize: if we have a singular PR but no array, convert to array
+    if (singlePR?.url && !arrayPRs) {
+      s.pull_requests = [singlePR];
+    }
+    // If we only have an array, keep the singular for backward compatibility (use first PR)
+    else if (arrayPRs && arrayPRs.length > 0 && !singlePR?.url) {
+      s.pull_request = arrayPRs[0];
+    }
+  }
+
   // Enrich sessions with PR merge status from GitHub (uses cache for merged PRs)
   const prUrls = [
     ...new Set(
-      sessions
-        .map((s) => (s.pull_request as { url?: string } | null)?.url)
-        .filter((url): url is string => !!url)
+      sessions.flatMap((s) => {
+        const urls: string[] = [];
+        // Collect from singular PR
+        const singlePR = s.pull_request as { url?: string } | null;
+        if (singlePR?.url) urls.push(singlePR.url);
+        // Collect from PR array
+        const arrayPRs = s.pull_requests as Array<{ url: string }> | undefined;
+        if (arrayPRs) {
+          urls.push(...arrayPRs.map(pr => pr.url));
+        }
+        return urls;
+      }).filter((url): url is string => !!url)
     ),
   ];
 
   if (prUrls.length > 0) {
     const statuses = await batchCheckPRStatuses(prUrls);
     for (const s of sessions) {
+      // Enrich singular PR
       const pr = s.pull_request as { url?: string } | null;
       if (pr?.url && statuses.has(pr.url)) {
         const st = statuses.get(pr.url)!;
         s.pull_request = { ...pr, merged: st.merged, closed: st.closed, merged_at: st.mergedAt, merged_by: st.mergedBy };
+      }
+
+      // Enrich PR array
+      const arrayPRs = s.pull_requests as Array<{ url: string; merged?: boolean; closed?: boolean; merged_at?: string | null; merged_by?: string | null }> | undefined;
+      if (arrayPRs) {
+        s.pull_requests = arrayPRs.map(pr => {
+          if (statuses.has(pr.url)) {
+            const st = statuses.get(pr.url)!;
+            return { ...pr, merged: st.merged, closed: st.closed, merged_at: st.mergedAt, merged_by: st.mergedBy };
+          }
+          return pr;
+        });
       }
     }
   }
@@ -56,7 +93,12 @@ async function autoCreateVaultRecords(sessions: Record<string, unknown>[]) {
     // Skip if vault record already exists
     if (await hasVaultSessionRecord(id)) continue;
 
-    const pr = s.pull_request as { url?: string; merged?: boolean; closed?: boolean } | null;
+    // Get all PRs (normalize from both singular and array)
+    const singlePR = s.pull_request as { url?: string; merged?: boolean; closed?: boolean } | null;
+    const arrayPRs = s.pull_requests as Array<{ url: string; merged?: boolean; closed?: boolean }> | undefined;
+    const allPRs = arrayPRs || (singlePR?.url ? [singlePR] : []);
+    const pr = singlePR; // Keep for backward compatibility
+
     const title = (s.title as string) || `Devin session ${id.slice(0, 8)}`;
     const completedAt = (s.updated_at as string) || new Date().toISOString();
 
@@ -79,7 +121,12 @@ async function autoCreateVaultRecords(sessions: Record<string, unknown>[]) {
     } catch {}
 
     const structuredOutput = s.structured_output as { title?: string; summary?: string } | null;
-    const summary = structuredOutput?.summary || devinSummary || (pr?.merged ? "PR merged" : status);
+    const defaultSummary = allPRs.length > 0
+      ? allPRs.every(p => p.merged) ? `${allPRs.length} PR${allPRs.length > 1 ? 's' : ''} merged`
+        : allPRs.some(p => p.merged) ? `${allPRs.filter(p => p.merged).length}/${allPRs.length} PRs merged`
+        : `${allPRs.length} PR${allPRs.length > 1 ? 's' : ''} created`
+      : status;
+    const summary = structuredOutput?.summary || devinSummary || defaultSummary;
 
     await persistVaultSessionRecord({
       id,
@@ -95,13 +142,17 @@ async function autoCreateVaultRecords(sessions: Record<string, unknown>[]) {
     });
 
     // Also write a changelog entry with the actual summary
-    const prLine = pr?.url ? `**PR:** [#${pr.url.split("/").pop()}](${pr.url})${pr.merged ? " (merged)" : pr.closed ? " (closed)" : ""}` : "";
+    const prLines = allPRs.length > 0
+      ? allPRs.length === 1
+        ? `**PR:** [#${allPRs[0].url.split("/").pop()}](${allPRs[0].url})${allPRs[0].merged ? " (merged)" : allPRs[0].closed ? " (closed)" : ""}`
+        : `**PRs:**\n${allPRs.map(p => `- [#${p.url.split("/").pop()}](${p.url})${p.merged ? " (merged)" : p.closed ? " (closed)" : ""}`).join('\n')}`
+      : "";
     const changelogBody = [
       `## ${title}`,
       ``,
       `**Source:** Devin`,
       `**Completed:** ${new Date(completedAt).toLocaleString()}`,
-      prLine,
+      prLines,
       ``,
       summary && summary !== status ? `### Summary\n\n${summary}` : "",
     ].filter(Boolean).join("\n");

@@ -184,24 +184,28 @@ export default function DevinSessionDetailPanel({
               </span>
             </div>
 
-            {session.pull_request?.url && (
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-t-text-muted">PR</span>
+            {((session.pull_requests && session.pull_requests.length > 0) ? session.pull_requests : (session.pull_request?.url ? [session.pull_request] : [])).map((pr, index) => (
+              <div key={`${pr.url}-${index}`} className="flex items-center justify-between">
+                <span className="text-xs text-t-text-muted">
+                  {index === 0 ? (session.pull_requests && session.pull_requests.length > 1 ? "PRs" : "PR") : ""}
+                </span>
                 <a
-                  href={session.pull_request.url}
+                  href={pr.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={`text-xs font-medium ${
-                    session.pull_request.merged
+                    pr.merged
                       ? "text-t-success"
+                      : pr.closed
+                      ? "text-t-text-muted"
                       : "text-t-accent"
                   }`}
                 >
-                  #{session.pull_request.url.split("/").pop()}
-                  {session.pull_request.merged ? " (merged)" : session.pull_request.closed ? " (closed)" : " (open)"}
+                  #{pr.url.split("/").pop()}
+                  {pr.merged ? " (merged)" : pr.closed ? " (closed)" : " (open)"}
                 </a>
               </div>
-            )}
+            ))}
 
             <div className="flex items-center justify-between">
               <span className="text-xs text-t-text-muted">Session</span>

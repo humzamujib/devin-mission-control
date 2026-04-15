@@ -28,6 +28,13 @@ export type DevinSession = {
     merged_at?: string | null;
     merged_by?: string | null;
   } | null;
+  pull_requests?: Array<{
+    url: string;
+    merged?: boolean;
+    closed?: boolean;
+    merged_at?: string | null;
+    merged_by?: string | null;
+  }>;
   structured_output?: {
     title?: string;
     summary?: string;
@@ -45,6 +52,13 @@ export type BoardCard = {
   pull_request_url?: string;
   pull_request_merged?: boolean;
   pull_request_merged_at?: string | null;
+  pull_requests?: Array<{
+    url: string;
+    merged?: boolean;
+    closed?: boolean;
+    merged_at?: string | null;
+    merged_by?: string | null;
+  }>;
   requesting_user?: string;
 };
 
