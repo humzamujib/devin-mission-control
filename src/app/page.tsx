@@ -11,6 +11,7 @@ import {
 import { usePageVisible } from "@/hooks/usePageVisible";
 import type { SessionRecord } from "@/lib/vault";
 import { getStoredModel, setStoredModel, getStoredEffort, setStoredEffort } from "@/lib/model-config";
+import { validateSessionState } from "@/lib/session-state";
 import Header from "@/components/Header";
 import KanbanBoard from "@/components/KanbanBoard";
 import CreateSessionModal from "@/components/CreateSessionModal";
@@ -21,6 +22,7 @@ import SettingsPanel from "@/components/SettingsPanel";
 import VaultPanel from "@/components/VaultPanel";
 import OrchestratorPanel from "@/components/OrchestratorPanel";
 import VaultSessionDetailPanel from "@/components/VaultSessionDetailPanel";
+import DevinSessionDetailPanel from "@/components/DevinSessionDetailPanel";
 import SessionDiagnostics from "@/components/SessionDiagnostics";
 
 const POLL_INTERVAL = 30_000;
@@ -309,15 +311,55 @@ export default function Home() {
     };
   }, [fetchDevinSessions, pageVisible]);
 
+  // === Check for problematic Devin sessions ===
+  const hasProblematicDevinSessions = useMemo(() => {
+    if (devinSessions.length === 0) return false;
+
+    for (const session of devinSessions) {
+      const isDismissed = dismissedIds.has(session.session_id);
+      const validation = validateSessionState(session, isDismissed);
+
+      // Check if session has validation issues OR dismissal state mismatches
+      if (!validation.isValid ||
+          isDismissed !== (session.status_enum === "finished" || session.status_enum === "stopped")) {
+        return true;
+      }
+    }
+    return false;
+  }, [devinSessions, dismissedIds]);
+
+
   // === Unified open/close ===
 
+  const [selectedDevinSessionId, setSelectedDevinSessionId] = useState<string | null>(null);
+
   function handleToggleCard(id: string) {
-    // Handle vault sessions separately
+    // Handle vault sessions → sidebar
     if (id.startsWith("vault-")) {
       setSelectedVaultSessionId(selectedVaultSessionId === id ? null : id);
+      setSelectedDevinSessionId(null);
       return;
     }
 
+    // Handle all finished sessions → sidebar
+    const card = boardCards.find((c) => c.id === id);
+    if (card?.column === "finished") {
+      // Check if there's a vault record for this session
+      const vaultRecord = vaultRecords.find((r) => r.id === id);
+      if (vaultRecord) {
+        setSelectedVaultSessionId(`vault-${id}`);
+        setSelectedDevinSessionId(null);
+        return;
+      }
+      // Devin sessions use the Devin detail panel
+      if (card.source === "devin") {
+        setSelectedDevinSessionId(selectedDevinSessionId === id ? null : id);
+        setSelectedVaultSessionId(null);
+        return;
+      }
+    }
+
+    // Active sessions → bottom split view
     setOpenIds((ids) => {
       if (ids.includes(id)) {
         const next = ids.filter((i) => i !== id);
@@ -469,27 +511,65 @@ export default function Home() {
       };
     });
 
-    const claudeCards: BoardCard[] = claudeSessions.map((s) => ({
-      id: s.id,
-      source: "claude",
-      title: s.title,
-      subtitle: s.context,
-      status_display: s.status,
-      column:
-        s.status === "running"
-          ? "running"
-          : s.status === "blocked"
-            ? "blocked"
-            : s.status === "idle"
-              ? "idle"
-              : "finished",
-      updated_at: s.updated_at,
-      requesting_user: s.repo,
-    }));
+    const claudeCards: BoardCard[] = claudeSessions.map((s) => {
+      let column: KanbanColumnId;
+      let status_display: string = s.status;
+
+      // Check if Claude session has a vault record when status is "done"
+      // This prevents premature categorization as "finished" before vault persistence
+      if (s.status === "done") {
+        // Check if vault record exists for this session
+        // Vault records are created asynchronously after Claude sessions complete
+        const hasVaultRecord = vaultRecords.some(record => record.id === s.id);
+
+        if (hasVaultRecord) {
+          // Vault record exists, truly finished
+          column = "finished";
+          status_display = "finished";
+        } else {
+          // Vault record doesn't exist yet, still processing markdown summary
+          column = "idle";
+          status_display = "processing";
+        }
+      } else {
+        // Handle other statuses normally
+        switch (s.status) {
+          case "running":
+            column = "running";
+            break;
+          case "blocked":
+            column = "blocked";
+            break;
+          case "idle":
+            column = "idle";
+            break;
+          default:
+            column = "idle";
+        }
+      }
+
+      return {
+        id: s.id,
+        source: "claude",
+        title: s.title,
+        subtitle: s.context,
+        status_display,
+        column,
+        updated_at: s.updated_at,
+        requesting_user: s.repo,
+      };
+    });
 
     // Dedupe: don't show vault sessions that are still in the active claude list
+    // Vault sessions have IDs like "vault-{original-session-id}"
+    // We need to check if the original session ID matches any active session
     const activeIds = new Set(claudeCards.map((c) => c.id));
-    const filteredVault = vaultSessions.filter((v) => !activeIds.has(v.id));
+    const filteredVault = vaultSessions.filter((v) => {
+      // Extract original session ID from vault ID (remove "vault-" prefix)
+      const originalId = v.id.replace(/^vault-/, '');
+      // Don't show vault session if its original session is still active
+      return !activeIds.has(originalId);
+    });
 
     return [...devinCards, ...claudeCards, ...filteredVault];
   }, [devinSessions, claudeSessions, dismissedIds, vaultSessions]);
@@ -622,8 +702,18 @@ export default function Home() {
         onClose={() => setSelectedVaultSessionId(null)}
       />
 
-      {/* Session Diagnostics - only on sessions tab */}
-      {tab === "sessions" && (
+      {/* Finished Devin Session Detail Panel */}
+      <DevinSessionDetailPanel
+        session={
+          selectedDevinSessionId
+            ? devinSessions.find((s) => s.session_id === selectedDevinSessionId) ?? null
+            : null
+        }
+        onClose={() => setSelectedDevinSessionId(null)}
+      />
+
+      {/* Session Diagnostics - only show when there are actual Devin session issues */}
+      {tab === "sessions" && hasProblematicDevinSessions && (
         <SessionDiagnostics
           sessions={devinSessions}
           dismissedIds={dismissedIds}

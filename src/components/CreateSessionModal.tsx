@@ -7,11 +7,19 @@ import { MODELS, EFFORT_LEVELS } from "@/lib/model-config";
 
 type Agent = "devin" | "claude";
 
+type ClaudeSessionData = {
+  title: string;
+  repo: string;
+  notes: string;
+  model: string;
+  effort: string;
+};
+
 type CreateSessionModalProps = {
   open: boolean;
   onClose: () => void;
   onSubmitDevin: (prompt: string) => Promise<void>;
-  onSubmitClaude: (data: { title: string; repo: string; notes: string; model: string; effort: string }) => void;
+  onSubmitClaude: (data: ClaudeSessionData) => void;
   initialPrompt?: string;
   repos: string[];
   defaultModel: string;
@@ -39,9 +47,10 @@ export default function CreateSessionModal({
   const [effort, setEffort] = useState(defaultEffort);
   const [loading, setLoading] = useState(false);
 
-  // Ensure repo and prompt are properly initialized
+  // Initialize repo and prompt when modal opens or props change
+  // NOTE: prompt is intentionally excluded from dependencies to prevent infinite loops
   useEffect(() => {
-    const timeout = setTimeout(() => {
+    if (open) {
       if (initialPrompt !== undefined && initialPrompt !== prompt) {
         setPrompt(initialPrompt);
         if (initialPrompt.trim()) {
@@ -51,42 +60,70 @@ export default function CreateSessionModal({
       if (repos.length > 0 && !repo) {
         setRepo(repos[0]);
       }
-    }, 0);
-
-    return () => clearTimeout(timeout);
-  }, [initialPrompt, repos, prompt, repo]);
+    }
+  }, [open, initialPrompt, repos, repo]);
 
   if (!open) return null;
 
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    if (agent === "devin" && !prompt.trim()) return;
+    if (agent === "claude" && (!title.trim() || !repo)) return;
+
     setLoading(true);
-    if (agent === "devin") {
-      if (!prompt.trim()) return;
-      await onSubmitDevin(prompt);
-      setPrompt("");
-    } else {
-      if (!title.trim() || !repo) return;
-      onSubmitClaude({ title, repo, notes, model, effort });
-      setTitle("");
-      setNotes("");
+
+    try {
+      if (agent === "devin") {
+        await onSubmitDevin(prompt);
+        setPrompt("");
+      } else {
+        onSubmitClaude({ title, repo, notes, model, effort });
+        setTitle("");
+        setNotes("");
+      }
+      onClose();
+    } catch (error) {
+      console.error("Failed to create session:", error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-    onClose();
-  }
+  };
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-xl border border-t-border bg-t-surface p-6 shadow-2xl">
-        <h2 className="mb-4 text-lg font-semibold text-t-text-bright">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={handleBackdropClick}
+    >
+      <div
+        className="w-full max-w-lg rounded-xl border border-t-border bg-t-surface p-6 shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 id="modal-title" className="mb-4 text-lg font-semibold text-t-text-bright">
           New Session
         </h2>
 
         {/* Agent toggle */}
         {claudeEnabled ? (
-          <div className="mb-4 flex rounded-lg border border-t-border overflow-hidden">
+          <div
+            className="mb-4 flex rounded-lg border border-t-border overflow-hidden"
+            role="tablist"
+            aria-label="Select agent type"
+          >
             <button
               type="button"
+              role="tab"
+              aria-selected={agent === "devin"}
+              aria-controls="agent-devin"
               onClick={() => setAgent("devin")}
               className={`flex-1 py-2 text-sm font-medium transition-colors ${
                 agent === "devin"
@@ -98,6 +135,9 @@ export default function CreateSessionModal({
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={agent === "claude"}
+              aria-controls="agent-claude"
               onClick={() => setAgent("claude")}
               className={`flex-1 py-2 text-sm font-medium transition-colors ${
                 agent === "claude"
@@ -114,16 +154,19 @@ export default function CreateSessionModal({
 
         <form onSubmit={handleSubmit}>
           {agent === "devin" ? (
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Describe the task for Devin..."
-              rows={5}
-              className="w-full rounded-lg border border-t-border bg-t-bg px-4 py-3 text-sm text-t-text placeholder-t-text-muted outline-none transition-colors focus:border-t-primary"
-              autoFocus
-            />
+            <div id="agent-devin" role="tabpanel" aria-labelledby="devin-tab">
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Describe the task for Devin..."
+                rows={5}
+                className="w-full rounded-lg border border-t-border bg-t-bg px-4 py-3 text-sm text-t-text placeholder-t-text-muted outline-none transition-colors focus:border-t-primary"
+                autoFocus
+                aria-label="Task description for Devin"
+              />
+            </div>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div id="agent-claude" role="tabpanel" aria-labelledby="claude-tab" className="flex flex-col gap-3">
               <div>
                 <label className="mb-1 block text-xs text-t-text-muted">
                   Title
@@ -133,6 +176,7 @@ export default function CreateSessionModal({
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="What are you working on?"
                   autoFocus
+                  aria-label="Session title"
                 />
               </div>
               <div>
@@ -143,6 +187,7 @@ export default function CreateSessionModal({
                   value={repo}
                   onChange={(e) => setRepo(e.target.value)}
                   className="w-full rounded-md border border-t-border bg-t-bg px-3 py-2 text-sm text-t-text outline-none focus:border-t-primary"
+                  aria-label="Repository selection"
                 >
                   {repos.map((r) => (
                     <option key={r} value={r}>
@@ -160,6 +205,7 @@ export default function CreateSessionModal({
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
                     className="w-full rounded-md border border-t-border bg-t-bg px-3 py-2 text-sm text-t-text outline-none focus:border-t-primary"
+                    aria-label="Model selection"
                   >
                     {MODELS.map((m) => (
                       <option key={m.id} value={m.id}>
@@ -176,6 +222,7 @@ export default function CreateSessionModal({
                     value={effort}
                     onChange={(e) => setEffort(e.target.value)}
                     className="w-full rounded-md border border-t-border bg-t-bg px-3 py-2 text-sm text-t-text outline-none focus:border-t-primary"
+                    aria-label="Effort level selection"
                   >
                     {EFFORT_LEVELS.map((e) => (
                       <option key={e} value={e}>
@@ -195,6 +242,7 @@ export default function CreateSessionModal({
                   placeholder="Context, goals, setup instructions..."
                   rows={3}
                   className="w-full rounded-lg border border-t-border bg-t-bg px-4 py-3 text-sm text-t-text placeholder-t-text-muted outline-none transition-colors focus:border-t-primary"
+                  aria-label="Session notes"
                 />
               </div>
             </div>

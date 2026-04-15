@@ -36,9 +36,9 @@ function formatDuration(durationMs?: number): string {
   }
 }
 
-function formatCost(costUsd?: number): string {
+function formatCost(costUsd?: number | string): string {
   if (!costUsd) return "Unknown";
-  return `$${costUsd.toFixed(4)}`;
+  return `$${Number(costUsd).toFixed(4)}`;
 }
 
 function timeAgo(dateStr: string): string {
@@ -147,7 +147,7 @@ export default function VaultSessionDetailPanel({
       )}
 
       {session && !loading && (
-        <>
+        <ScrollArea className="flex-1 min-h-0">
           {/* Session Info */}
           <div className="border-b border-t-border px-5 py-3 space-y-3">
             {/* Status and Repository */}
@@ -262,14 +262,13 @@ export default function VaultSessionDetailPanel({
           )}
 
           {/* Messages/Conversation Highlights */}
-          <div className="flex-1 overflow-hidden flex flex-col">
+          <div>
             <div className="px-5 py-3 border-b border-t-border">
               <h3 className="text-xs font-medium text-t-text-muted">
                 Conversation ({session.messages?.length || 0} messages)
               </h3>
             </div>
 
-            <ScrollArea className="flex-1">
               <div className="px-5 py-3 space-y-3">
                 {session.messages && session.messages.length > 0 ? (
                   session.messages.map((msg, i) => {
@@ -319,16 +318,8 @@ export default function VaultSessionDetailPanel({
                   </p>
                 )}
               </div>
-            </ScrollArea>
           </div>
-
-          {/* Footer - vault info */}
-          <div className="border-t border-t-border px-5 py-3 text-center">
-            <p className="text-xs text-t-text-muted">
-              Complete session record stored in vault
-            </p>
-          </div>
-        </>
+        </ScrollArea>
       )}
     </div>
   );

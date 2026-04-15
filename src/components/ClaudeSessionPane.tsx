@@ -245,7 +245,8 @@ export default function ClaudeSessionPane({
       <Separator />
 
       {/* Messages */}
-      <ScrollArea className="flex-1 min-h-0 h-0">
+      <div className="flex-1 min-h-0 overflow-hidden">
+      <ScrollArea className="h-full">
         <div className="flex flex-col gap-2 px-3 py-2">
           {messages.length > 0 ? (
             messages
@@ -261,6 +262,7 @@ export default function ClaudeSessionPane({
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
+      </div>
 
       {/* Footer — input for SDK sessions */}
       {isSdkSession && !isDone && (

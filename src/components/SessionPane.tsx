@@ -325,7 +325,8 @@ export default function SessionPane({
       <Separator />
 
       {/* Messages */}
-      <ScrollArea className="flex-1 min-h-0 h-0">
+      <div className="flex-1 min-h-0 overflow-hidden">
+      <ScrollArea className="h-full">
         <div className="flex flex-col gap-2 px-3 py-2">
           {messages.length > 0 ? (
             messages.map((msg, i) => (
@@ -343,6 +344,7 @@ export default function SessionPane({
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
+      </div>
 
       {/* Footer */}
       {(isDismissed ||

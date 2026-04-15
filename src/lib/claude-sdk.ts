@@ -1,5 +1,6 @@
 import { query, type Query } from "@anthropic-ai/claude-agent-sdk";
-import { writeSessionRecord, writeChangelog, type SessionRecord } from "./vault";
+import { persistVaultSessionRecord, persistVaultChangelog } from "./storage";
+import type { SessionRecord } from "./vault";
 
 const REPO_BASE_PATH = process.env.REPO_BASE_PATH || "~/Desktop";
 
@@ -195,8 +196,8 @@ async function consumeSession(session: SdkSession) {
             timestamp: m.timestamp,
           })),
         };
-        writeSessionRecord(record).catch((e) =>
-          console.error("[sdk] Failed to write session record:", e)
+        persistVaultSessionRecord(record).catch((e) =>
+          console.error("[sdk] Failed to persist session record:", e)
         );
 
         // Write changelog entry
@@ -220,8 +221,8 @@ async function consumeSession(session: SdkSession) {
           ``,
           resultMsg.result || "No result text",
         ].join("\n");
-        writeChangelog(session.title, changelogBody).catch((e) =>
-          console.error("[sdk] Failed to write changelog:", e)
+        persistVaultChangelog(session.title, changelogBody, "claude-sdk").catch((e) =>
+          console.error("[sdk] Failed to persist changelog:", e)
         );
       }
     }

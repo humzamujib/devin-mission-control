@@ -1,6 +1,7 @@
 import { tool, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
-import { readFile, listDirectory, listSessionRecords, writeSessionRecord } from "./vault";
+import { readFile, listDirectory, writeSessionRecord } from "./vault";
+import { listVaultPatterns, listVaultSessionRecords } from "./storage";
 import { getSessions, createSession as createClaudeSession, stopSession as stopClaudeSession } from "./claude-sdk";
 
 // Vault tools
@@ -36,7 +37,7 @@ const writeVaultFile = tool(
     title: z.string(),
     content: z.string().describe("JSON content to write"),
   },
-  async ({ title, content }) => {
+  async ({ content }) => {
     try {
       const record = JSON.parse(content);
       const success = await writeSessionRecord(record);
@@ -102,11 +103,53 @@ const getSessionHistory = tool(
   "Get completed session records from the vault",
   { limit: z.number().default(10) },
   async ({ limit }) => {
-    const records = await listSessionRecords();
+    const records = await listVaultSessionRecords();
     return {
       content: [{
         type: "text" as const,
         text: JSON.stringify(records.slice(0, limit), null, 2),
+      }],
+    };
+  }
+);
+
+const getVaultPatterns = tool(
+  "get_vault_patterns",
+  "Get all development patterns from the vault with metadata (tags, repos, confidence). Use this to find relevant patterns to inject into session prompts.",
+  {},
+  async () => {
+    const patterns = await listVaultPatterns();
+    const summary = patterns.map((p) => ({
+      name: p.name,
+      tags: p.tags,
+      repos: p.repos,
+      confidence: p.confidence,
+      reference_count: p.reference_count,
+      body_preview: p.body.slice(0, 200),
+    }));
+    return {
+      content: [{
+        type: "text" as const,
+        text: JSON.stringify(summary, null, 2),
+      }],
+    };
+  }
+);
+
+const getVaultPatternDetail = tool(
+  "get_vault_pattern_detail",
+  "Get the full content of a specific pattern by name. Use after get_vault_patterns to load full pattern text for injection into session prompts.",
+  { name: z.string().describe("Pattern name, e.g. 'code-quality', 'styling'") },
+  async ({ name }) => {
+    const patterns = await listVaultPatterns();
+    const pattern = patterns.find((p) => p.name === name);
+    if (!pattern) {
+      return { content: [{ type: "text" as const, text: `Pattern '${name}' not found` }] };
+    }
+    return {
+      content: [{
+        type: "text" as const,
+        text: pattern.body,
       }],
     };
   }
@@ -238,6 +281,26 @@ const getLinearTickets = tool(
   }
 );
 
+const runDistill = tool(
+  "run_vault_distillation",
+  "Trigger the weekly vault distillation cycle. This spawns a Claude session that analyzes recent changelogs, extracts new patterns, applies decay scoring, archives stale content, and generates a digest. Returns the session ID to monitor progress.",
+  {},
+  async () => {
+    try {
+      const res = await fetch("http://localhost:3000/api/vault/distill", { method: "POST" });
+      const data = await res.json();
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Distillation session started: ${data.id}. Monitor it on the board or check session history when complete.`,
+        }],
+      };
+    } catch (err) {
+      return { content: [{ type: "text" as const, text: `Error starting distillation: ${err}` }] };
+    }
+  }
+);
+
 export function createOrchestratorMcpServer() {
   return createSdkMcpServer({
     name: "mission-control",
@@ -246,6 +309,8 @@ export function createOrchestratorMcpServer() {
       readVaultFile,
       listVaultDir,
       writeVaultFile,
+      getVaultPatterns,
+      getVaultPatternDetail,
       getBoardState,
       getSessionHistory,
       createDevinSession,
@@ -253,6 +318,7 @@ export function createOrchestratorMcpServer() {
       stopClaude,
       stopDevin,
       getLinearTickets,
+      runDistill,
     ],
   });
 }

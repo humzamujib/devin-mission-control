@@ -1,4 +1,4 @@
-import { getSession, terminateSession } from "@/lib/devin";
+import { getSession, terminateSession } from "@/lib/storage";
 
 export async function GET(
   _request: Request,
