@@ -13,6 +13,7 @@ type HeaderProps = {
   claudeEnabled?: boolean;
   linearEnabled?: boolean;
   vaultEnabled?: boolean;
+  knowledgeEnabled?: boolean;
 };
 
 export default function Header({
@@ -26,6 +27,7 @@ export default function Header({
   claudeEnabled = true,
   linearEnabled = true,
   vaultEnabled = true,
+  knowledgeEnabled = true,
 }: HeaderProps) {
   return (
     <header className="border-b border-t-border bg-t-bg">
@@ -48,16 +50,18 @@ export default function Header({
                 {sessionCount}
               </span>
             </button>
-            <button
-              onClick={() => onTabChange("knowledge")}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                tab === "knowledge"
-                  ? "bg-t-surface text-t-text-bright"
-                  : "text-t-text-muted hover:text-t-text-secondary"
-              }`}
-            >
-              Knowledge
-            </button>
+            {knowledgeEnabled && (
+              <button
+                onClick={() => onTabChange("knowledge")}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  tab === "knowledge"
+                    ? "bg-t-surface text-t-text-bright"
+                    : "text-t-text-muted hover:text-t-text-secondary"
+                }`}
+              >
+                Knowledge
+              </button>
+            )}
             {vaultEnabled && (
               <button
                 onClick={() => onTabChange("vault")}

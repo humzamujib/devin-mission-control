@@ -71,7 +71,7 @@ export default function Home() {
   const [selectedVaultSessionId, setSelectedVaultSessionId] = useState<string | null>(null);
   const [defaultModel, setDefaultModel] = useState(() => getStoredModel());
   const [defaultEffort, setDefaultEffort] = useState(() => getStoredEffort());
-  const [featureFlags, setFeatureFlags] = useState({ claudeEnabled: false, linearEnabled: false, vaultEnabled: false });
+  const [featureFlags, setFeatureFlags] = useState({ claudeEnabled: false, linearEnabled: false, vaultEnabled: false, knowledgeEnabled: false });
   const msgCountsRef = useRef<Record<string, number>>({});
   const pageVisible = usePageVisible();
 
@@ -607,6 +607,7 @@ export default function Home() {
         claudeEnabled={featureFlags.claudeEnabled}
         linearEnabled={featureFlags.linearEnabled}
         vaultEnabled={featureFlags.vaultEnabled}
+        knowledgeEnabled={featureFlags.knowledgeEnabled}
       />
 
       {tab === "sessions" && (
