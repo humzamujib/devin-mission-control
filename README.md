@@ -116,17 +116,18 @@ Open [http://localhost:3000](http://localhost:3000).
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DEVIN_API_TOKEN` | Yes | Devin API key |
-| `GITHUB_TOKEN` | Yes | GitHub PAT for PR status enrichment |
-| `NEXT_PUBLIC_DEVIN_USER_EMAIL` | Yes | Filters sessions to your email |
-| `NEXT_PUBLIC_DEVIN_USER_NAME` | Yes | Display name |
-| `NEXT_PUBLIC_DEVIN_ENTERPRISE_URL` | Yes | Base URL for Devin session links |
-| `DATABASE_URL` | For Postgres | PostgreSQL connection string |
-| `POSTGRES_ENABLED` | For Postgres | Enable writes to Postgres (`true`/`false`) |
-| `POSTGRES_READ_ENABLED` | For Postgres | Enable reads from Postgres (`true`/`false`) |
-| `LINEAR_VAULT_REPO` | For Linear/Vault | GitHub `owner/repo` for vault fallback + Linear tickets |
+| `DEVIN_API_TOKEN` | **Yes** | Devin API key |
+| `NEXT_PUBLIC_DEVIN_USER_EMAIL` | Recommended | Filters sessions to your email — omit to see all org sessions |
+| `NEXT_PUBLIC_DEVIN_ENTERPRISE_URL` | **Yes** | Base URL for Devin session links |
+| `NEXT_PUBLIC_DEVIN_USER_NAME` | No | Display name — only used if Knowledge tab is enabled |
+| `GITHUB_TOKEN` | No | GitHub PAT — enables PR status on session cards |
+| `DATABASE_URL` | For Vault | PostgreSQL connection string |
+| `POSTGRES_ENABLED` | For Vault | Enable writes to Postgres (`true`/`false`) |
+| `POSTGRES_READ_ENABLED` | For Vault | Enable reads from Postgres (`true`/`false`) |
+| `LINEAR_VAULT_REPO` | For Linear | GitHub `owner/repo` for Linear tickets |
 | `LINEAR_SYNC_PLAYBOOK_ID` | For Linear | Devin playbook that exports Linear tickets |
 | `ANTHROPIC_API_KEY` | For Claude | Or just have Claude CLI installed and authenticated |
+| `KNOWLEDGE_ENABLED` | No | Set to `true` to show the Knowledge tab (`false` by default) |
 
 ## Feature Flags
 
@@ -134,11 +135,12 @@ Features auto-enable based on which env vars are set:
 
 | Feature | Requires |
 |---------|----------|
-| Devin sessions + Kanban | `DEVIN_API_TOKEN` |
-| PR status enrichment | `GITHUB_TOKEN` |
+| Devin sessions + Kanban | `DEVIN_API_TOKEN` — the only required var |
+| PR status on session cards | `GITHUB_TOKEN` |
 | Claude orchestrator + sessions | Claude CLI installed or `ANTHROPIC_API_KEY` |
 | Vault (patterns, changelogs) | `DATABASE_URL` + Postgres flags |
 | Linear tickets | `LINEAR_VAULT_REPO` |
+| Knowledge tab | `KNOWLEDGE_ENABLED=true` |
 
 ## Tech Stack
 
