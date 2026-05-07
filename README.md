@@ -117,7 +117,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `DEVIN_API_TOKEN` | **Yes** | Devin API key |
-| `NEXT_PUBLIC_DEVIN_USER_EMAIL` | Recommended | Filters sessions to your email — omit to see all org sessions |
+| `NEXT_PUBLIC_DEVIN_USER_EMAIL` | **Yes** | Filters sessions to your email |
 | `NEXT_PUBLIC_DEVIN_ENTERPRISE_URL` | **Yes** | Base URL for Devin session links |
 | `NEXT_PUBLIC_DEVIN_USER_NAME` | No | Display name — only used if Knowledge tab is enabled |
 | `GITHUB_TOKEN` | No | GitHub PAT — enables PR status on session cards |
@@ -126,7 +126,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `POSTGRES_READ_ENABLED` | For Vault | Enable reads from Postgres (`true`/`false`) |
 | `LINEAR_VAULT_REPO` | For Linear | GitHub `owner/repo` for Linear tickets |
 | `LINEAR_SYNC_PLAYBOOK_ID` | For Linear | Devin playbook that exports Linear tickets |
-| `ANTHROPIC_API_KEY` | For Claude | Or just have Claude CLI installed and authenticated |
+| `ANTHROPIC_API_KEY` | For Claude | Enables orchestrator + Claude sessions |
 | `KNOWLEDGE_ENABLED` | No | Set to `true` to show the Knowledge tab (`false` by default) |
 
 ## Feature Flags
