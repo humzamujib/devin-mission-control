@@ -9,14 +9,13 @@ import {
   updateClaudeSession,
 } from "@/lib/claude-sessions";
 import { usePageVisible } from "@/hooks/usePageVisible";
-import type { SessionRecord } from "@/lib/vault";
+import type { SessionRecord } from "@/types/session-record";
 import { getStoredModel, setStoredModel, getStoredEffort, setStoredEffort } from "@/lib/model-config";
 import { validateSessionState } from "@/lib/session-state";
 import Header from "@/components/Header";
 import KanbanBoard from "@/components/KanbanBoard";
 import CreateSessionModal from "@/components/CreateSessionModal";
 import SessionSplitView from "@/components/SessionSplitView";
-import LinearPanel from "@/components/LinearPanel";
 import KnowledgePanel from "@/components/KnowledgePanel";
 import SettingsPanel from "@/components/SettingsPanel";
 import VaultPanel from "@/components/VaultPanel";
@@ -55,7 +54,6 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [showLinear, setShowLinear] = useState(false);
   const [createPrompt, setCreatePrompt] = useState("");
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("board");
@@ -71,7 +69,7 @@ export default function Home() {
   const [selectedVaultSessionId, setSelectedVaultSessionId] = useState<string | null>(null);
   const [defaultModel, setDefaultModel] = useState(() => getStoredModel());
   const [defaultEffort, setDefaultEffort] = useState(() => getStoredEffort());
-  const [featureFlags, setFeatureFlags] = useState({ claudeEnabled: false, linearEnabled: false, vaultEnabled: false });
+  const [featureFlags, setFeatureFlags] = useState({ claudeEnabled: false, vaultEnabled: false, knowledgeEnabled: false });
   const msgCountsRef = useRef<Record<string, number>>({});
   const pageVisible = usePageVisible();
 
@@ -81,6 +79,22 @@ export default function Home() {
       .then((r) => r.json())
       .then(setFeatureFlags)
       .catch(() => {});
+  }, []);
+
+  // Cmd-K (Ctrl-K on non-mac) opens the New Session modal from any tab.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "k") return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const isEditable =
+        tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable;
+      if (isEditable) return;
+      e.preventDefault();
+      setShowCreate(true);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
   function handleModelChange(model: string) {
@@ -391,18 +405,26 @@ export default function Home() {
     handleClosePane(id);
   }
 
-  async function handleCreateDevin(prompt: string) {
+  async function handleCreateDevin(
+    data: {
+      prompt: string;
+      repo?: string;
+      snapshot_id?: string;
+      playbook_id?: string;
+      tags?: string[];
+    } | string,
+    options?: { skipPatterns?: boolean }
+  ) {
+    const payload =
+      typeof data === "string"
+        ? { prompt: data, skipPatterns: options?.skipPatterns }
+        : { ...data, skipPatterns: options?.skipPatterns };
     await fetch("/api/devin/sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify(payload),
     });
     fetchDevinSessions();
-  }
-
-  async function handleLinearToDevin(prompt: string) {
-    setShowLinear(false);
-    await handleCreateDevin(prompt);
   }
 
   // === Claude actions ===
@@ -413,6 +435,7 @@ export default function Home() {
     notes: string;
     model: string;
     effort: string;
+    skipPatterns?: boolean;
   }) {
     const prompt = data.notes
       ? `${data.title}\n\n${data.notes}`
@@ -422,7 +445,7 @@ export default function Home() {
     const res = await fetch("/api/claude/sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, repo: data.repo, title: data.title, model: data.model, effort: data.effort }),
+      body: JSON.stringify({ prompt, repo: data.repo, title: data.title, model: data.model, effort: data.effort, skipPatterns: data.skipPatterns }),
     });
     const { id } = await res.json();
 
@@ -470,11 +493,11 @@ export default function Home() {
         const hasOpenPRs = allPRs.some(pr => pr.url && !pr.merged && !pr.closed);
         const allPRsClosed = allPRs.every(pr => pr.merged || pr.closed);
 
-        if (allPRsClosed && allPRs.length > 0) {
+        if (allPRsClosed) {
           // All PRs are merged/closed → finished
           column = "finished";
           status_display = "finished";
-        } else if (hasOpenPRs) {
+        } else {
           // Has open PRs → needs attention
           column = "idle";
           status_display = "idle";
@@ -600,13 +623,12 @@ export default function Home() {
         tab={tab}
         onTabChange={setTab}
         onCreateSession={() => setShowCreate(true)}
-        onToggleLinear={() => setShowLinear((v) => !v)}
         sessionCount={activeCount}
         lastRefresh={lastRefresh}
         onRefresh={fetchDevinSessions}
         claudeEnabled={featureFlags.claudeEnabled}
-        linearEnabled={featureFlags.linearEnabled}
         vaultEnabled={featureFlags.vaultEnabled}
+        knowledgeEnabled={featureFlags.knowledgeEnabled}
       />
 
       {tab === "sessions" && (
@@ -662,25 +684,10 @@ export default function Home() {
             defaultEffort={defaultEffort}
             claudeEnabled={featureFlags.claudeEnabled}
           />
-          {featureFlags.linearEnabled && (
-            <LinearPanel
-              open={showLinear}
-              onClose={() => setShowLinear(false)}
-              onCreateSession={handleLinearToDevin}
-              activeSessionTitles={devinSessions
-                .filter(
-                  (s) =>
-                    (s.status_enum !== "finished" &&
-                      s.status_enum !== "stopped") ||
-                    s.pull_request
-                )
-                .map((s) => s.title || "")}
-            />
-          )}
         </>
       )}
 
-      {tab === "knowledge" && <KnowledgePanel />}
+      {tab === "knowledge" && featureFlags.knowledgeEnabled && <KnowledgePanel />}
 
       {tab === "vault" && featureFlags.vaultEnabled && <VaultPanel />}
 

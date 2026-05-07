@@ -14,8 +14,8 @@ function claudeCliAvailable(): boolean {
 export async function GET() {
   return Response.json({
     claudeEnabled: claudeCliAvailable(),
-    linearEnabled: !!process.env.LINEAR_VAULT_REPO,
-    vaultEnabled: !!process.env.LINEAR_VAULT_REPO && !!process.env.GITHUB_TOKEN,
+    vaultEnabled: process.env.POSTGRES_ENABLED === 'true',
+    knowledgeEnabled: process.env.KNOWLEDGE_ENABLED === 'true',
     postgresEnabled: process.env.POSTGRES_ENABLED === 'true',
     postgresReadEnabled: process.env.POSTGRES_READ_ENABLED === 'true',
   });

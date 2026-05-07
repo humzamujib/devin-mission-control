@@ -6,26 +6,24 @@ type HeaderProps = {
   tab: Tab;
   onTabChange: (tab: Tab) => void;
   onCreateSession: () => void;
-  onToggleLinear: () => void;
   sessionCount: number;
   lastRefresh: Date | null;
   onRefresh: () => void;
   claudeEnabled?: boolean;
-  linearEnabled?: boolean;
   vaultEnabled?: boolean;
+  knowledgeEnabled?: boolean;
 };
 
 export default function Header({
   tab,
   onTabChange,
   onCreateSession,
-  onToggleLinear,
   sessionCount,
   lastRefresh,
   onRefresh,
-  claudeEnabled = true,
-  linearEnabled = true,
-  vaultEnabled = true,
+  claudeEnabled = false,
+  vaultEnabled = false,
+  knowledgeEnabled = false,
 }: HeaderProps) {
   return (
     <header className="border-b border-t-border bg-t-bg">
@@ -48,16 +46,18 @@ export default function Header({
                 {sessionCount}
               </span>
             </button>
-            <button
-              onClick={() => onTabChange("knowledge")}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                tab === "knowledge"
-                  ? "bg-t-surface text-t-text-bright"
-                  : "text-t-text-muted hover:text-t-text-secondary"
-              }`}
-            >
-              Knowledge
-            </button>
+            {knowledgeEnabled && (
+              <button
+                onClick={() => onTabChange("knowledge")}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  tab === "knowledge"
+                    ? "bg-t-surface text-t-text-bright"
+                    : "text-t-text-muted hover:text-t-text-secondary"
+                }`}
+              >
+                Knowledge
+              </button>
+            )}
             {vaultEnabled && (
               <button
                 onClick={() => onTabChange("vault")}
@@ -101,14 +101,6 @@ export default function Header({
                 <span className="text-xs text-t-text-muted">
                   {lastRefresh.toLocaleTimeString()}
                 </span>
-              )}
-              {linearEnabled && (
-                <button
-                  onClick={onToggleLinear}
-                  className="rounded-lg border border-t-primary/40 bg-t-primary/10 px-3 py-1.5 text-sm text-t-accent-dim transition-colors hover:bg-t-primary/20"
-                >
-                  Linear
-                </button>
               )}
               <button
                 onClick={onRefresh}
