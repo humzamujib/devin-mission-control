@@ -2,8 +2,6 @@
 
 A lightweight Kanban dashboard for managing your Devin AI coding sessions.
 
-![Mission Control](public/screenshot.png)
-
 ## Features
 
 - **Kanban Board** — Sessions organized into Queued, Running, Needs Input, Idle, and Finished columns with live polling
